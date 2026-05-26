@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fleet Insight | __DB_DISPLAY__</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' rx='10' fill='%2325457B'/><path fill='%23fff' d='M14 34V20h4v14h-4zm8 0V14h4v20h-4zm8 0v-8h4v8h-4z'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* ── Reset & base ──────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:'IBM Plex Sans',sans-serif;background:#EEF1F8;color:#1A1C1E}
+.mono{font-family:'IBM Plex Sans Mono',monospace}
+
+/* ── Top bar ───────────────────────────────────────── */
+#bar{height:48px;background:#1565C0;display:flex;align-items:center;padding:0 28px;gap:12px;box-shadow:0 2px 6px rgba(0,0,0,.25);flex-shrink:0}
+#bar .logo{font-size:15px;font-weight:600;color:#fff;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
+#bar .logo .material-symbols-rounded{font-size:22px;color:#fff}
+#bar .ctr{margin-left:auto;font-size:13px;color:rgba(255,255,255,.65);font-weight:400}
+#prog{height:3px;background:#BBDEFB;flex-shrink:0}
+#prog-f{height:3px;background:#1565C0;transition:width .35s ease}
+
+/* ── Deck & slides ─────────────────────────────────── */
+body{display:flex;flex-direction:column}
+#deck{flex:1;position:relative;overflow:hidden}
+.slide{position:absolute;inset:0;display:none;flex-direction:column;background:#fff;overflow:hidden}
+.slide.on{display:flex}
+
+/* ── Slide zones ───────────────────────────────────── */
+.s-head{height:72px;padding:0 40px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #E0E4F0;flex-shrink:0}
+.s-head .material-symbols-rounded{font-size:26px;color:#1565C0}
+.s-head h1{font-size:24px;font-weight:600;color:#1A1C1E;letter-spacing:-.2px;flex:1}
+
+
+.s-insight{padding:13px 40px 13px 36px;border-left:4px solid #1565C0;margin:14px 40px 0;background:#F0F4FF;border-radius:0 8px 8px 0;flex-shrink:0}
+.s-insight p{font-size:14px;color:#3A4060;line-height:1.75;font-weight:400}
+
+.s-body{flex:1;padding:14px 40px 0;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+
+.s-metrics{height:84px;display:flex;align-items:center;padding:0 40px;border-top:1px solid #E0E4F0;flex-shrink:0;background:#FAFBFF}
+.metric{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1px solid #E0E4F0;padding:0 8px;text-align:center}
+.metric:last-child{border-right:none}
+.m-val{font-size:32px;font-weight:700;color:#1565C0;line-height:1;font-variant-numeric:tabular-nums}
+.m-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-top:4px}
+.m-sub{font-size:11px;color:#9AA0B2;margin-top:2px}
+
+/* ── Floating nav ──────────────────────────────────── */
+.nav-btn{position:fixed;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;border:none;background:rgba(21,101,192,.85);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.25);transition:background .15s;z-index:200}
+.material-symbols-rounded.nav-icon{font-size:22px}
+.nav-btn:hover{background:#1565C0}
+.nav-btn:disabled{opacity:.25;cursor:default}
+#btn-p{left:10px}
+#btn-n{right:10px}
+
+/* ── Cover ─────────────────────────────────────────── */
+.cover-slide{background:linear-gradient(145deg,#0D47A1 0%,#1976D2 55%,#0288D1 100%);display:flex;flex-direction:column;justify-content:center;padding:0 80px;color:#fff;height:100%}
+.co-eyebrow{font-size:12px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:20px}
+.co-line1{font-size:18px;font-weight:300;color:rgba(255,255,255,.75);letter-spacing:.5px}
+.co-line2{font-size:52px;font-weight:700;letter-spacing:-1.5px;line-height:1.05;margin-top:6px}
+.co-line3{font-size:20px;font-weight:300;color:rgba(255,255,255,.7);margin-top:8px;letter-spacing:.5px}
+.co-div{width:56px;height:3px;background:rgba(255,255,255,.35);margin:28px 0}
+.co-meta{list-style:none;display:flex;flex-direction:column;gap:10px}
+.co-meta li{font-size:14px;color:rgba(255,255,255,.65);display:flex;align-items:center;gap:10px}
+.co-meta .mi{font-size:18px;color:rgba(255,255,255,.45)}
+.co-ts{font-size:13px;color:rgba(255,255,255,.45);margin-top:28px;letter-spacing:.3px}
+
+/* ── Portfolio ─────────────────────────────────────── */
+.port-tbl{width:100%;border-collapse:collapse}
+.port-tbl th{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;font-weight:600;padding:10px 16px;border-bottom:2px solid #E0E4F0;text-align:left;background:#FAFBFF;position:sticky;top:0}
+.port-tbl td{padding:13px 16px;font-size:14px;color:#1A1C1E;border-bottom:1px solid #F0F2F8;vertical-align:middle}
+.port-tbl tr:last-child td{border-bottom:none}
+.port-tbl tr:hover td{background:#F5F7FF}
+.port-tbl tr.unassigned td{background:#FFF8E1}
+.port-tbl tr.unassigned td:first-child{color:#E65100;font-weight:600}
+.port-bar-wrap{background:#EEF1F8;border-radius:4px;height:10px;min-width:60px}
+.port-bar-fill{height:10px;border-radius:4px;background:#1565C0}
+.port-bar-fill.ua{background:#EF6C00}
+.port-pct{font-family:'IBM Plex Sans Mono',monospace;font-size:13px;color:#6B7280;padding-left:8px;white-space:nowrap}
+
+/* ── Heatmap ────────────────────────────────────────── */
+.hmap-full{flex:1;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1);margin-bottom:0}
+#leaflet-map{width:100%;height:100%}
+
+/* ── Scrollable bar ─────────────────────────────────── */
+.sbar-wrap{flex:1;overflow-y:auto;padding-right:4px}
+.sbar-row{display:grid;grid-template-columns:200px 1fr 60px;align-items:center;gap:12px;padding:7px 4px;border-bottom:1px solid #F0F2F8}
+.sbar-row:last-child{border-bottom:none}
+.sbar-lbl{overflow:hidden}
+.sbar-nm{font-size:13px;color:#1A1C1E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.sbar-sub{font-size:11px;color:#9AA0B2;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar-track{position:relative;background:#EEF1F8;border-radius:6px;height:18px}
+.sbar-fill{height:18px;border-radius:6px}
+.sbar-fill.blue{background:#1565C0}
+.sbar-fill.red{background:#EF5350}
+.sbar-thr{position:absolute;top:-4px;bottom:-4px;width:2px;background:#EF5350;border-radius:2px;opacity:.8}
+.sbar-val{font-size:13px;color:#3A4060;text-align:right;font-family:'IBM Plex Sans Mono',monospace}
+
+/* ── Generic horizontal bar ─────────────────────────── */
+.hbar-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;padding-right:4px}
+.hbar-row{display:grid;grid-template-columns:240px 1fr 90px;align-items:center;gap:12px;padding:7px 4px;border-bottom:1px solid #F0F2F8}
+.hbar-row:last-child{border-bottom:none}
+.hbar-lbl-w{min-width:0}
+.hbar-nm{font-size:13px;color:#1A1C1E;font-weight:500;word-wrap:break-word;overflow-wrap:break-word;line-height:1.35}
+.hbar-sub{font-size:11px;color:#9AA0B2;margin-top:1px;word-wrap:break-word;overflow-wrap:break-word;line-height:1.3}
+.hbar-track{position:relative;background:#EEF1F8;border-radius:6px;height:22px}
+.hbar-fill{height:22px;border-radius:6px;min-width:3px}
+.hbar-val{font-size:13px;color:#3A4060;text-align:right;font-family:'IBM Plex Sans Mono',monospace;line-height:1.3}
+.hbar-thr{position:absolute;top:-5px;bottom:-5px;width:2px;border-radius:2px;opacity:.85}
+
+/* ── Table ──────────────────────────────────────────── */
+.tbl-wrap{flex:1;overflow-y:auto;overflow-x:auto}
+.dtbl{width:100%;border-collapse:collapse}
+.dtbl th{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;font-weight:600;padding:10px 16px;border-bottom:2px solid #E0E4F0;text-align:left;background:#FAFBFF;position:sticky;top:0}
+.dtbl td{padding:12px 16px;font-size:13px;color:#1A1C1E;border-bottom:1px solid #F0F2F8;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
+.dtbl tr:last-child td{border-bottom:none}
+.dtbl tr:hover td{background:#F5F7FF}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-stack{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.badge-stack .badge-more{display:none}
+.badge-stack.expanded .badge-more{display:inline-flex}
+.badge-toggle{background:none;border:none;color:#1565C0;font-size:12px;font-weight:600;cursor:pointer;padding:2px 0;font-family:inherit;align-self:flex-start}
+.badge-toggle:hover{text-decoration:underline}
+.b-red{background:#FFEBEE;color:#C62828}
+.b-orange{background:#FFF3E0;color:#E65100}
+.b-yellow{background:#FFFDE7;color:#F9A825}
+.b-green{background:#E8F5E9;color:#2E7D32}
+
+/* ── Line-only chart ────────────────────────────────── */
+.line-wrap{flex:1;min-height:0;display:flex;flex-direction:column}
+.line-lbl{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#9AA0B2;font-weight:600;margin-bottom:8px;flex-shrink:0}
+.line-svg-wrap{flex:1;min-height:0;overflow:hidden}
+
+/* ── Donut (standalone) ─────────────────────────────── */
+.donut-page{flex:1;display:flex;align-items:center;justify-content:center;gap:64px;padding:8px 0}
+.donut-ring{border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(0,0,0,.12)}
+.donut-inner{position:absolute;background:#fff;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.d-total{font-weight:700;color:#1A1C1E;line-height:1}
+.d-sub{font-size:12px;color:#9AA0B2;margin-top:4px;text-align:center;max-width:120px}
+.donut-leg{display:flex;flex-direction:column;gap:12px;min-width:200px}
+.dl-row{display:flex;align-items:center;gap:12px}
+.dl-dot{width:13px;height:13px;border-radius:50%;flex-shrink:0}
+.dl-nm{flex:1;font-size:14px;color:#3A4060}
+.dl-ct{font-family:'IBM Plex Sans Mono',monospace;font-weight:700;font-size:15px;color:#1A1C1E;min-width:36px;text-align:right}
+.dl-pct{font-size:12px;color:#9AA0B2;min-width:38px;text-align:right}
+
+/* ── Bar+Line (idling) ──────────────────────────────── */
+.bl-wrap{flex:1;min-height:0;display:flex;flex-direction:column}
+.bl-svg-wrap{flex:1;min-height:0;overflow:hidden}
+
+/* ── Vertical bar (safety events) ──────────────────── */
+.vbar-wrap{flex:1;min-height:0;display:flex;flex-direction:column}
+.vbar-svg-wrap{flex:1;min-height:0;overflow:hidden}
+
+/* ── Summary ────────────────────────────────────────── */
+.recs-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:14px;overflow-y:auto;align-content:start;padding-bottom:8px}
+.rec-card{background:#F7F9FF;border:1px solid #DDE3F5;border-radius:12px;padding:18px 20px;display:flex;gap:14px;align-items:flex-start}
+.rec-icon{font-size:22px;color:#1565C0;flex-shrink:0;margin-top:2px}
+.rec-txt{font-size:14px;line-height:1.75;color:#3A4060}
+
+/* ── Thanks ─────────────────────────────────────────── */
+.thanks-slide{background:linear-gradient(145deg,#0D47A1 0%,#1976D2 55%,#0288D1 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;color:#fff;height:100%}
+.thanks-icon{font-size:88px;color:rgba(255,255,255,.9)}
+.thanks-h{font-size:52px;font-weight:700;letter-spacing:-1.5px}
+.thanks-sub{font-size:18px;font-weight:300;color:rgba(255,255,255,.7)}
+.thanks-db{font-size:13px;color:rgba(255,255,255,.4);margin-top:8px;letter-spacing:.5px}
+
+/* ── Diagnostic dropdown ───────────────────────────────── */
+.diag-wrap{position:relative;margin-left:auto}
+.diag-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:500;cursor:pointer;transition:background .15s}
+.diag-btn:hover{background:rgba(255,255,255,.25)}
+.diag-btn .material-symbols-rounded{font-size:18px}
+.diag-menu{position:absolute;top:100%;right:0;margin-top:6px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);min-width:200px;z-index:500;display:none;overflow:hidden}
+.diag-menu.show{display:block}
+.diag-item{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#1A1C1E;cursor:pointer;transition:background .1s}
+.diag-item:hover{background:#F0F4FF}
+.diag-item .material-symbols-rounded{font-size:18px;color:#1565C0}
+.diag-sep{height:1px;background:#E0E4F0;margin:4px 0}
+.diag-head{padding:10px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;background:#FAFBFF}
+</style>
+</head>
+<body>
+<div id="bar">
+  <div class="logo"><span class="material-symbols-rounded">analytics</span>Fleet Insight <span style="color:rgba(255,255,255,.55);">| __DB_DISPLAY__</span></div>
+  <div class="diag-wrap">
+    <button class="diag-btn" id="diag-btn" onclick="toggleDiagMenu(event)" title="Download diagnostic CSV for data verification">
+      <span class="material-symbols-rounded">bug_report</span>Diagnostic CSV
+      <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
+    </button>
+    <div class="diag-menu" id="diag-menu">
+      <div class="diag-head">Per-Vehicle Summary</div>
+      <div class="diag-item" onclick="downloadDiagCsv('vehicles')"><span class="material-symbols-rounded">directions_car</span>Vehicle Summary</div>
+      <div class="diag-sep"></div>
+      <div class="diag-head">Raw Event Data</div>
+      <div class="diag-item" onclick="downloadDiagCsv('safety_events')"><span class="material-symbols-rounded">health_and_safety</span>Safety Events</div>
+      <div class="diag-item" onclick="downloadDiagCsv('battery_faults')"><span class="material-symbols-rounded">battery_error</span>Battery Faults</div>
+      <div class="diag-item" onclick="downloadDiagCsv('engine_faults')"><span class="material-symbols-rounded">car_gear</span>Engine Faults</div>
+      <div class="diag-sep"></div>
+      <div class="diag-item" onclick="downloadDiagCsv('all')"><span class="material-symbols-rounded">download</span>Download All</div>
+    </div>
+  </div>
+  <div class="ctr" id="top-ctr"></div>
+</div>
+<div id="prog"><div id="prog-f" style="width:0"></div></div>
+<div id="deck"></div>
+<button class="nav-btn" id="btn-p" onclick="go(-1)"><span class="material-symbols-rounded nav-icon">arrow_back</span></button>
+<button class="nav-btn" id="btn-n" onclick="go(1)"><span class="material-symbols-rounded nav-icon">arrow_forward</span></button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script>
+const SLIDES=__SLIDES_JSON__;
+const DIAG=__DIAG_DATA__;
+const CURRENCY='__CURRENCY__';
+const DB_NAME='__DB_DISPLAY__';
+
+// ── Diagnostic CSV functions ────────────────────────────────────────────────
+function toggleDiagMenu(e){
+  e.stopPropagation();
+  document.getElementById('diag-menu').classList.toggle('show');
+}
+document.addEventListener('click',()=>document.getElementById('diag-menu').classList.remove('show'));
+
+function csvEscape(v){
+  if(v==null)return '';
+  const s=String(v);
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+
+function downloadBlob(content,filename){
+  const blob=new Blob([content],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+function downloadDiagCsv(type){
+  document.getElementById('diag-menu').classList.remove('show');
+  const period=SLIDES[0]?.period?.replace(/\s*→\s*/g,'_to_')||'period';
+  const prefix='diag_'+DB_NAME+'_'+period.replace(/[^a-zA-Z0-9_-]/g,'');
+
+  if(type==='all'){
+    downloadDiagCsv('vehicles');
+    setTimeout(()=>downloadDiagCsv('safety_events'),100);
+    setTimeout(()=>downloadDiagCsv('battery_faults'),200);
+    setTimeout(()=>downloadDiagCsv('engine_faults'),300);
+    return;
+  }
+
+  let rows,headers,filename;
+
+  if(type==='vehicles'){
+    headers=['Device ID','Device Name','Group','Trip Count','Active Days','Distance (km)','Drive Hours','Idle Hours','Idle Cost','Safety Score','Safety Events','Battery Faults'];
+    rows=(DIAG.vehicles||[]).map(v=>[
+      v.device_id,v.device_name,v.group,v.trip_count,v.active_days,
+      v.distance_km,v.drive_hours,v.idle_hours,v.idle_cost,
+      v.safety_score,v.safety_events,v.battery_faults
+    ]);
+    filename=prefix+'_vehicles.csv';
+  }else if(type==='safety_events'){
+    headers=['Device ID','Device Name','Rule ID','Rule Name','Date Time','Duration'];
+    rows=(DIAG.safety_events||[]).map(e=>[
+      e.device_id,e.device_name,e.rule_id,e.rule_name,e.date_time,e.duration
+    ]);
+    filename=prefix+'_safety_events.csv';
+  }else if(type==='battery_faults'){
+    headers=['Device ID','Device Name','Diagnostic ID','Diagnostic Name','Code','Date Time'];
+    rows=(DIAG.battery_faults||[]).map(e=>[
+      e.device_id,e.device_name,e.diagnostic_id,e.diagnostic_name,e.code,e.date_time
+    ]);
+    filename=prefix+'_battery_faults.csv';
+  }else if(type==='engine_faults'){
+    headers=['Device ID','Device Name','Diagnostic ID','Diagnostic Name','Code','Controller ID','Date Time'];
+    rows=(DIAG.engine_faults||[]).map(e=>[
+      e.device_id,e.device_name,e.diagnostic_id,e.diagnostic_name,e.code,e.controller_id,e.date_time
+    ]);
+    filename=prefix+'_engine_faults.csv';
+  }else{
+    return;
+  }
+
+  const csv=[headers.map(csvEscape).join(','),...rows.map(r=>r.map(csvEscape).join(','))].join('\r\n');
+  downloadBlob(csv,filename);
+}
+let cur=0, _mapInst=null;
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;};
+const div=(cls)=>el('div',cls);
+const mi=(name,extra)=>{const s=el('span','material-symbols-rounded');s.textContent=name;if(extra)s.style.cssText=extra;return s;};
+
+function buildHead(s,idx){
+  const h=div('s-head');
+  const ic=el('span','material-symbols-rounded'); ic.textContent=(s.icon||'bar_chart'); h.append(ic);
+  const t=el('h1'); t.textContent=s.title; h.append(t);
+
+  return h;
+}
+function buildInsight(s){
+  if(!s.insight) return null;
+  const box=div('s-insight'); const p=el('p'); p.textContent=s.insight; box.append(p); return box;
+}
+function buildMetrics(s){
+  const strip=div('s-metrics');
+  (s.metrics||[]).slice(0,4).forEach(m=>{
+    const mc=div('metric');
+    const v=el('div','m-val'); v.textContent=m.value; mc.append(v);
+    const l=el('div','m-lbl'); l.textContent=m.label; mc.append(l);
+    if(m.sub){const sb=el('div','m-sub'); sb.textContent=m.sub; mc.append(sb);}
+    strip.append(mc);
+  });
+  return strip;
+}
+
+// ── Cover ─────────────────────────────────────────────────────────────────────
+function renderCover(s){
+  const slide=div('slide on');
+  const c=div('cover-slide');
+
+  const l1=el('div','co-line1'); l1.textContent=s.line1||'Analytics Report'; c.append(l1);
+  const l2=el('div','co-line2'); l2.textContent=s.line2||'Fleet Data Insights'; c.append(l2);
+  const l3=el('div','co-line3'); l3.textContent=s.line3||'Powered by Geotab'; c.append(l3);
+  const dv=div('co-div'); c.append(dv);
+  const meta=el('ul','co-meta');
+  [[`database`,s.db||''],['schedule',s.period||'']].forEach(([ic,tx])=>{
+    if(!tx) return;
+    const li=el('li'); li.append(mi(ic,'font-size:18px;color:rgba(255,255,255,.45);margin-right:2px;'),document.createTextNode(tx));
+    meta.append(li);
+  });
+  c.append(meta);
+
+  slide.append(c); return slide;
+}
+
+// ── Portfolio ─────────────────────────────────────────────────────────────────
+function renderPortfolio(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const wrap=div('tbl-wrap');
+  const tbl=el('table','port-tbl');
+  const thead=el('thead'); const tr=el('tr');
+  ['Group','Vehicles','Share of Fleet',''].forEach(h=>{const th=el('th'); th.textContent=h; tr.append(th);}); thead.append(tr); tbl.append(thead);
+  const tbody=el('tbody');
+  const maxC=Math.max(...(s.rows||[]).map(r=>r.count),1);
+  (s.rows||[]).forEach(r=>{
+    const row=el('tr'); if(r.unassigned) row.className='unassigned';
+    const td1=el('td'); td1.textContent=r.name; row.append(td1);
+    const td2=el('td'); td2.style.cssText='font-family:"IBM Plex Sans Mono",monospace;font-weight:600'; td2.textContent=r.count; row.append(td2);
+    const td3=el('td');
+    const bw=div('port-bar-wrap');
+    const bf=div('port-bar-fill'+(r.unassigned?' ua':'')); bf.style.width=(r.count/maxC*100)+'%'; bw.append(bf); td3.append(bw); row.append(td3);
+    const td4=el('td','port-pct'); td4.textContent=r.pct+'%'; row.append(td4);
+    tbody.append(row);
+  });
+  tbl.append(tbody); wrap.append(tbl); body.append(wrap); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Heatmap ───────────────────────────────────────────────────────────────────
+function renderHeatmap(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const body=div('s-body'); body.style.cssText='flex:1;min-height:0;padding:14px 40px 0;';
+  const mapDiv=div('hmap-full'); mapDiv.id='leaflet-map';
+  body.append(mapDiv); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+function initLeaflet(pts){
+  if(_mapInst){try{_mapInst.remove();}catch(e){} _mapInst=null;}
+  const container=document.getElementById('leaflet-map');
+  if(!container) return;
+  const map=L.map(container,{zoomControl:true,scrollWheelZoom:true});
+  _mapInst=map;
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; CartoDB &copy; OpenStreetMap',maxZoom:18}).addTo(map);
+  if(pts&&pts.length){
+    L.heatLayer(pts,{radius:20,blur:18,maxZoom:13,gradient:{0.3:'#1565C0',0.6:'#FFA726',1:'#D32F2F'}}).addTo(map);
+    let minLat=90,maxLat=-90,minLon=180,maxLon=-180;
+    for(const p of pts){minLat=Math.min(minLat,p[0]);maxLat=Math.max(maxLat,p[0]);minLon=Math.min(minLon,p[1]);maxLon=Math.max(maxLon,p[1]);}
+    map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[20,20]});
+  }else{map.setView([3.8,109],6);}
+}
+
+// ── Scrollable bar ────────────────────────────────────────────────────────────
+function renderBarScroll(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const wrap=div('sbar-wrap');
+  (s.bars||[]).forEach(b=>{
+    const row=div('sbar-row');
+    const lw=div('sbar-lbl');
+    const nm=el('div','sbar-nm'); nm.textContent=b.label; nm.title=b.label; lw.append(nm);
+    if(b.sub){const sb=el('div','sbar-sub'); sb.textContent=b.sub; lw.append(sb);}
+    const track=div('sbar-track');
+    const fill=div('sbar-fill '+(b.red?'red':'blue')); fill.style.width=b.pct+'%'; track.append(fill);
+    if(s.thr_pct!=null){const tl=div('sbar-thr'); tl.style.left=s.thr_pct+'%'; track.append(tl);}
+    const val=el('div','sbar-val'); val.textContent=b.value;
+    row.append(lw,track,val); wrap.append(row);
+  });
+  body.append(wrap); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Line-only chart ───────────────────────────────────────────────────────────
+function renderLineOnly(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const wrap=div('line-wrap');
+  const lbl=el('div','line-lbl'); lbl.textContent=s.line_label||''; wrap.append(lbl);
+  const svgWrap=div('line-svg-wrap');
+  const data=s.line_data||[];
+  const col=s.line_color||'#1565C0';
+  if(data.length){
+    const key=s.line_key||'value';
+    const vals=data.map(d=>parseFloat(d[key])||0);
+    const mn=Math.min(...vals)*.88, mx=Math.max(...vals)*1.12||1;
+    const W=560,H=240,PL=52,PR=24,PT=20,PB=44;
+    const N=data.length;
+    const X=i=>PL+(i/(N-1||1))*(W-PL-PR);
+    const Y=v=>PT+(1-(v-mn)/(mx-mn||1))*(H-PT-PB);
+    const ns='http://www.w3.org/2000/svg';
+    const svg=document.createElementNS(ns,'svg');
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);
+    svg.style.cssText='width:100%;height:100%;';
+    // horizontal grid lines
+    [0,1,2,3,4].forEach(i=>{
+      const y=PT+i*(H-PT-PB)/4;
+      const gl=document.createElementNS(ns,'line'); gl.setAttribute('x1',PL); gl.setAttribute('y1',y); gl.setAttribute('x2',W-PR); gl.setAttribute('y2',y); gl.setAttribute('stroke','#E8ECF6'); gl.setAttribute('stroke-width','1'); svg.append(gl);
+      const tl=document.createElementNS(ns,'text'); tl.setAttribute('x',PL-8); tl.setAttribute('y',y+4); tl.setAttribute('text-anchor','end'); tl.setAttribute('font-size','11'); tl.setAttribute('fill','#9AA0B2'); tl.textContent=(mn+(4-i)*(mx-mn)/4).toFixed(vals[0]%1===0?0:1); svg.append(tl);
+    });
+    // area fill
+    const pts=data.map((_,i)=>X(i)+','+Y(vals[i])).join(' ');
+    const area=document.createElementNS(ns,'polygon'); area.setAttribute('points',pts+' '+(W-PR)+','+(H-PB)+' '+PL+','+(H-PB)); area.setAttribute('fill',col.replace('#','rgba(').replace(/$/,',0.08)').replace('rgba(','rgba(0x').replace(/0x([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})/,(_,r,g,b)=>`${parseInt(r,16)},${parseInt(g,16)},${parseInt(b,16)}`)); area.setAttribute('fill','rgba(21,101,192,.08)'); svg.append(area);
+    // line
+    const pl=document.createElementNS(ns,'polyline'); pl.setAttribute('points',pts); pl.setAttribute('fill','none'); pl.setAttribute('stroke',col); pl.setAttribute('stroke-width','2.5'); pl.setAttribute('stroke-linejoin','round'); pl.setAttribute('stroke-linecap','round'); svg.append(pl);
+    // dots + value labels
+    data.forEach((d,i)=>{
+      const x=X(i),y=Y(vals[i]);
+      const c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r','2.5'); c.setAttribute('fill',col); svg.append(c);
+      const vt=document.createElementNS(ns,'text'); vt.setAttribute('x',x); vt.setAttribute('y',y-10); vt.setAttribute('text-anchor','middle'); vt.setAttribute('font-size','11'); vt.setAttribute('font-weight','600'); vt.setAttribute('fill',col); vt.textContent=vals[i]; svg.append(vt);
+      const xl=document.createElementNS(ns,'text'); xl.setAttribute('x',x); xl.setAttribute('y',H-PB+18); xl.setAttribute('text-anchor','middle'); xl.setAttribute('font-size','11'); xl.setAttribute('fill','#9AA0B2'); xl.textContent=d.month||''; svg.append(xl);
+    });
+    svgWrap.append(svg);
+  } else {
+    const nd=el('div',''); nd.style.cssText='color:#9AA0B2;font-size:14px;padding:24px;'; nd.textContent='No trend data'; svgWrap.append(nd);
+  }
+  wrap.append(svgWrap); body.append(wrap); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────────
+function renderTable(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const wrap=div('tbl-wrap');
+  const tbl=el('table','dtbl');
+  const thead=el('thead'); const tr=el('tr');
+  (s.cols||[]).forEach(c=>{const th=el('th'); th.textContent=c; tr.append(th);}); thead.append(tr); tbl.append(thead);
+  const tbody=el('tbody');
+  (s.rows||[]).forEach(r=>{
+    const row=el('tr');
+    if(r.row_bg) row.style.background=r.row_bg;
+    (r.cells||[]).forEach((c,i)=>{
+      const td=el('td');
+      const isLast=i===r.cells.length-1;
+      const cellStr=String(c);
+      if(isLast&&r.flag){
+        // Map flag to badge color class
+        const flagCls={'green':'green','red':'red','yellow':'yellow','orange':'orange'}[r.flag]||'orange';
+        // Check for multi-line fault names (badge-stack)
+        if(cellStr.includes('\n')){
+          const stack=div('badge-stack');
+          const lines=cellStr.split('\n');
+          const VISIBLE=3;
+          const badgeCls='badge b-'+flagCls;
+          lines.forEach((line,bi)=>{
+            const b=el('span',badgeCls+(bi>=VISIBLE?' badge-more':''));
+            b.textContent=line.trim(); stack.append(b);
+          });
+          if(lines.length>VISIBLE){
+            const btn=el('button','badge-toggle');
+            btn.textContent='+ Show '+(lines.length-VISIBLE)+' more';
+            btn.onclick=function(e){
+              e.stopPropagation();
+              const expanded=stack.classList.toggle('expanded');
+              btn.textContent=expanded?'− Show less':('+ Show '+(lines.length-VISIBLE)+' more');
+            };
+            stack.append(btn);
+          }
+          td.append(stack);
+        } else {
+          const b=el('span','badge b-'+flagCls);
+          b.textContent=c; td.append(b);
+        }
+      } else { td.textContent=c; }
+      row.append(td);
+    });
+    tbody.append(row);
+  });
+  tbl.append(tbody); wrap.append(tbl); body.append(wrap); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Donut (standalone, legend right) ─────────────────────────────────────────
+function renderDonut(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='8px';
+  const page=div('donut-page');
+  const tot=s.total||(s.donut||[]).reduce((a,d)=>a+d.count,0)||1;
+  let pct=0; const stops=[];
+  (s.donut||[]).forEach(d=>{const p=d.count/tot*100; stops.push(d.color+' '+pct.toFixed(1)+'% '+(pct+p).toFixed(1)+'%'); pct+=p;});
+  const SZ=260, IS=156;
+  const ring=div('donut-ring'); ring.style.cssText='width:'+SZ+'px;height:'+SZ+'px;background:conic-gradient('+stops.join(',')+')';;
+  const inner=div('donut-inner'); inner.style.cssText='width:'+IS+'px;height:'+IS+'px;';
+  const tv=el('div','d-total'); tv.style.fontSize='40px'; tv.textContent=tot; inner.append(tv);
+  if(s.donut_sub){const ts=el('div','d-sub'); ts.textContent=s.donut_sub; inner.append(ts);}
+  ring.append(inner);
+  const leg=div('donut-leg');
+  (s.donut||[]).forEach(d=>{
+    const row=div('dl-row');
+    const dot=el('div','dl-dot'); dot.style.background=d.color;
+    const nm=el('div','dl-nm'); nm.textContent=d.label;
+    const ct=el('div','dl-ct'); ct.textContent=d.count;
+    const p=el('div','dl-pct'); p.textContent=Math.round(d.count/tot*100)+'%';
+    row.append(dot,nm,ct,p); leg.append(row);
+  });
+  page.append(ring,leg); body.append(page); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Bar+Line (idling) ─────────────────────────────────────────────────────────
+function renderBarLine(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const wrap=div('bl-wrap');
+  const svgWrap=div('bl-svg-wrap');
+  const data=s.data||[];
+  if(data.length){
+    const ns='http://www.w3.org/2000/svg';
+    const svg=document.createElementNS(ns,'svg');
+    const W=620,H=300,PL=20,PR=20,PT=44,PB=56,N=data.length;
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);
+    svg.style.cssText='width:100%;height:100%;';
+    const sw=(W-PL-PR)/N, bw=sw*.5;
+    const mxH=Math.max(...data.map(d=>d.idle_hours||0))||1;
+    const mxC=Math.max(...data.map(d=>d.idle_cost_rm||0))||1;
+    // horizontal grid
+    [0,1,2,3,4].forEach(i=>{
+      const y=PT+i*(H-PT-PB)/4;
+      const gl=document.createElementNS(ns,'line'); gl.setAttribute('x1',PL); gl.setAttribute('y1',y); gl.setAttribute('x2',W-PR); gl.setAttribute('y2',y); gl.setAttribute('stroke','#EAECF4'); gl.setAttribute('stroke-width','1'); svg.append(gl);
+    });
+    // bars with labels inside at bottom
+    data.forEach((d,i)=>{
+      const x=PL+i*sw+(sw-bw)/2;
+      const bh=((d.idle_hours||0)/mxH)*(H-PT-PB); const y=H-PB-bh;
+      const rect=document.createElementNS(ns,'rect'); rect.setAttribute('x',x); rect.setAttribute('y',y); rect.setAttribute('width',bw); rect.setAttribute('height',bh); rect.setAttribute('fill','#1565C0'); rect.setAttribute('rx','3'); rect.setAttribute('opacity','.85'); svg.append(rect);
+      // Bar label: inside at bottom of bar (white text for contrast)
+      const vt=document.createElementNS(ns,'text'); vt.setAttribute('x',x+bw/2); vt.setAttribute('y',H-PB-6); vt.setAttribute('text-anchor','middle'); vt.setAttribute('font-size','10'); vt.setAttribute('font-weight','600'); vt.setAttribute('fill','#fff'); vt.textContent=d.idle_hours||0; svg.append(vt);
+      const xl=document.createElementNS(ns,'text'); xl.setAttribute('x',x+bw/2); xl.setAttribute('y',H-PB+18); xl.setAttribute('text-anchor','middle'); xl.setAttribute('font-size','10'); xl.setAttribute('fill','#9AA0B2'); xl.textContent=d.month||''; svg.append(xl);
+    });
+    // cost line
+    const lpts=data.map((d,i)=>{const x=PL+i*sw+sw/2; const y=PT+(1-(d.idle_cost_rm||0)/mxC)*(H-PT-PB); return x+','+y;}).join(' ');
+    const lp=document.createElementNS(ns,'polyline'); lp.setAttribute('points',lpts); lp.setAttribute('fill','none'); lp.setAttribute('stroke','#EF5350'); lp.setAttribute('stroke-width','1.5'); lp.setAttribute('stroke-linejoin','round'); lp.setAttribute('stroke-dasharray','4 2'); svg.append(lp);
+    // Line markers with labels on top
+    data.forEach((d,i)=>{
+      const x=PL+i*sw+sw/2; const y=PT+(1-(d.idle_cost_rm||0)/mxC)*(H-PT-PB);
+      const c=document.createElementNS(ns,'circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r','3'); c.setAttribute('fill','#EF5350'); svg.append(c);
+      // Line label: above marker
+      const vt=document.createElementNS(ns,'text'); vt.setAttribute('x',x); vt.setAttribute('y',y-10); vt.setAttribute('text-anchor','middle'); vt.setAttribute('font-size','9'); vt.setAttribute('font-weight','600'); vt.setAttribute('fill','#EF5350'); vt.textContent=CURRENCY+' '+(Math.round(d.idle_cost_rm||0)).toLocaleString(); svg.append(vt);
+    });
+    svgWrap.append(svg);
+  } else {
+    const nd=el('div',''); nd.style.cssText='color:#9AA0B2;padding:24px;font-size:14px;'; nd.textContent='No idling data'; svgWrap.append(nd);
+  }
+  wrap.append(svgWrap); body.append(wrap); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Horizontal bar ─────────────────────────────────────────────────────────────
+function renderHbar(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const list=div('hbar-list');
+  (s.bars||[]).forEach(b=>{
+    const row=div('hbar-row');
+    const lw=div('hbar-lbl-w');
+    const nm=el('div','hbar-nm'); nm.textContent=b.label; nm.title=b.label; lw.append(nm);
+    if(b.sub){const sb=el('div','hbar-sub'); sb.textContent=b.sub; lw.append(sb);}
+    const track=div('hbar-track');
+    const fill=div('hbar-fill'); fill.style.width=b.pct+'%'; fill.style.background=b.color||s.bar_color||'#1565C0'; track.append(fill);
+    if(s.thr1_pct!=null){const tl=div('hbar-thr'); tl.style.cssText='left:'+s.thr1_pct+'%;background:#C62828;'; track.append(tl);}
+    if(s.thr2_pct!=null){const tl=div('hbar-thr'); tl.style.cssText='left:'+s.thr2_pct+'%;background:#6D0000;'; track.append(tl);}
+    const valWrap=el('div','hbar-val'); valWrap.textContent=b.value;
+    if(b.value2){const v2=el('div',''); v2.style.cssText='font-size:11px;color:#9AA0B2;'; v2.textContent=b.value2; valWrap.append(v2);}
+    row.append(lw,track,valWrap); list.append(row);
+  });
+  body.append(list); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Horizontal bar with threshold lines ───────────────────────────────────────
+function renderHbarThreshold(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const list=div('hbar-list');
+  const t1=s.thr1||60, t2=s.thr2||75, t3=s.thr3||90;
+  (s.bars||[]).forEach(b=>{
+    const row=div('hbar-row');
+    const lw=div('hbar-lbl-w');
+    const nm=el('div','hbar-nm'); nm.textContent=b.label; nm.title=b.label; lw.append(nm);
+    if(b.sub){const sb=el('div','hbar-sub'); sb.textContent=b.sub; lw.append(sb);}
+    const clsMap={'High':'b-red','Medium':'b-orange','Mild':'b-orange','Low':'b-green'};
+    if(b.cls){const clsKey=Object.keys(clsMap).find(k=>b.cls.includes(k))||'';const bd=el('span','badge '+(clsMap[clsKey]||'b-green')); bd.style.cssText='font-size:11px;margin-top:3px;display:inline-flex;'; bd.textContent=b.cls; lw.append(bd);}
+    const track=div('hbar-track');
+    const fill=div('hbar-fill');
+    fill.style.width=b.pct+'%';
+    fill.style.background=b.value<t1?'#C62828':b.value<t2?'#EF6C00':b.value<t3?'#F9A825':'#2E7D32';
+    const tl1=div('hbar-thr'); tl1.style.cssText='left:'+t1+'%;background:#C62828;'; track.append(tl1);
+    const tl2=div('hbar-thr'); tl2.style.cssText='left:'+t2+'%;background:#EF6C00;'; track.append(tl2);
+    const tl3=div('hbar-thr'); tl3.style.cssText='left:'+t3+'%;background:#F9A825;'; track.append(tl3);
+    track.append(fill);
+    const val=el('div','hbar-val'); val.textContent=b.value; row.append(lw,track,val); list.append(row);
+  });
+  body.append(list); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Vertical bar (safety events) ──────────────────────────────────────────────
+function renderVbar(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const wrap=div('vbar-wrap');
+  const data=s.bars||[];
+  if(!data.length){const nd=el('div',''); nd.style.cssText='color:#9AA0B2;font-size:14px;padding:24px;'; nd.textContent='No data'; wrap.append(nd); body.append(wrap); slide.append(body); slide.append(buildMetrics(s)); return slide;}
+  const maxV=Math.max(...data.map(d=>d.value))||1;
+  const ns='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(ns,'svg');
+  const W=560,H=260,PL=16,PR=20,PT=24,PB=72;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.style.cssText='width:100%;height:100%;';
+  const N=data.length, sw=(W-PL-PR)/N, bw=Math.min(sw*.55,72);
+  // grid
+  [0,1,2,3,4].forEach(i=>{
+    const y=PT+i*(H-PT-PB)/4;
+    const gl=document.createElementNS(ns,'line'); gl.setAttribute('x1',PL); gl.setAttribute('y1',y); gl.setAttribute('x2',W-PR); gl.setAttribute('y2',y); gl.setAttribute('stroke','#EAECF4'); gl.setAttribute('stroke-width','1'); svg.append(gl);
+
+  });
+  // bars
+  data.forEach((d,i)=>{
+    const x=PL+i*sw+(sw-bw)/2;
+    const bh=(d.value/maxV)*(H-PT-PB); const y=H-PB-bh;
+    const rect=document.createElementNS(ns,'rect'); rect.setAttribute('x',x); rect.setAttribute('y',y); rect.setAttribute('width',bw); rect.setAttribute('height',bh||2); rect.setAttribute('fill',d.color||'#1565C0'); rect.setAttribute('rx','4'); svg.append(rect);
+    const vt=document.createElementNS(ns,'text'); vt.setAttribute('x',x+bw/2); vt.setAttribute('y',y-7); vt.setAttribute('text-anchor','middle'); vt.setAttribute('font-size','12'); vt.setAttribute('font-weight','700'); vt.setAttribute('fill','#1A1C1E'); vt.textContent=d.value.toLocaleString(); svg.append(vt);
+    // label (rotated -35deg)
+    const g=document.createElementNS(ns,'g'); g.setAttribute('transform','translate('+(x+bw/2)+','+(H-PB+10)+') rotate(-35)');
+    const xl=document.createElementNS(ns,'text'); xl.setAttribute('text-anchor','end'); xl.setAttribute('font-size','12'); xl.setAttribute('fill','#3A4060'); xl.textContent=d.label; g.append(xl); svg.append(g);
+  });
+  const svgWrap=div('vbar-svg-wrap');
+  svgWrap.append(svg); wrap.append(svgWrap); body.append(wrap); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Markdown bold helper ──────────────────────────────────────────────────────
+function mdBold(str){
+  // Replace **text** with <strong>text</strong>; escape HTML first
+  const esc=str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return esc.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+}
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+function renderSummary(s,idx){
+  const slide=div('slide on');
+  slide.append(buildHead(s,idx));
+  const ins=buildInsight(s); if(ins) slide.append(ins);
+  const body=div('s-body'); body.style.paddingTop='14px';
+  const grid=div('recs-grid');
+  (s.recs||[]).forEach(r=>{
+    const card=div('rec-card');
+    const ic=el('span','rec-icon material-symbols-rounded'); ic.textContent='lightbulb'; card.append(ic);
+    const txt=el('div','rec-txt'); txt.innerHTML=mdBold(r); card.append(txt);
+    grid.append(card);
+  });
+  body.append(grid); slide.append(body);
+  slide.append(buildMetrics(s)); return slide;
+}
+
+// ── Thanks ────────────────────────────────────────────────────────────────────
+function renderThanks(s){
+  const slide=div('slide on');
+  const c=div('thanks-slide');
+  const ic=el('span','thanks-icon material-symbols-rounded'); ic.textContent='analytics'; c.append(ic);
+  const h=el('div','thanks-h'); h.textContent='Thank You'; c.append(h);
+  const sub=el('div','thanks-sub'); sub.textContent='Fleet Data Insights \u2014 Powered by Geotab'; c.append(sub);
+  slide.append(c); return slide;
+}
+
+// ── Dispatcher ────────────────────────────────────────────────────────────────
+function renderSlide(i){
+  if(_mapInst){try{_mapInst.remove();}catch(e){} _mapInst=null;}
+  const s=SLIDES[i];
+  let el2;
+  switch(s.type){
+    case 'cover':          el2=renderCover(s); break;
+    case 'portfolio':      el2=renderPortfolio(s,i); break;
+    case 'heatmap':        el2=renderHeatmap(s,i); setTimeout(()=>initLeaflet(s.gps_points||[]),80); break;
+    case 'bar-scroll':     el2=renderBarScroll(s,i); break;
+    case 'line-only':      el2=renderLineOnly(s,i); break;
+    case 'table':          el2=renderTable(s,i); break;
+    case 'donut':          el2=renderDonut(s,i); break;
+    case 'bar-line':       el2=renderBarLine(s,i); break;
+    case 'hbar':           el2=renderHbar(s,i); break;
+    case 'hbar-threshold': el2=renderHbarThreshold(s,i); break;
+    case 'vbar':           el2=renderVbar(s,i); break;
+    case 'summary':        el2=renderSummary(s,i); break;
+    case 'thanks':         el2=renderThanks(s); break;
+    default: el2=div('slide on'); el2.style.padding='40px'; el2.textContent='Unknown: '+s.type;
+  }
+  document.getElementById('deck').innerHTML='';
+  document.getElementById('deck').append(el2);
+  document.getElementById('top-ctr').textContent=(i+1)+' of '+SLIDES.length;
+  document.getElementById('prog-f').style.width=((i+1)/SLIDES.length*100)+'%';
+  document.getElementById('btn-p').disabled=i===0;
+  document.getElementById('btn-n').disabled=i===SLIDES.length-1;
+}
+function go(d){if(cur+d>=0&&cur+d<SLIDES.length){cur+=d;renderSlide(cur);}}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowDown')go(1);if(e.key==='ArrowLeft'||e.key==='ArrowUp')go(-1);});
+renderSlide(0);
+</script>
+</body>
+</html>

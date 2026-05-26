@@ -1,0 +1,26 @@
+# Environment / secrets — NEVER commit these
+.env
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# OS clutter
+.DS_Store
+Thumbs.db
+
+# Generated reports (large, user-specific)
+*.xlsx
+Fleet_Insights_*.html
+fleet_insights.html
+fleet_insight_draft.ipynb
+
+# IDE
+.vscode/
+.idea/
