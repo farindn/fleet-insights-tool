@@ -10,7 +10,7 @@ You'll need:
 - A Windows or Mac computer
 - **Python 3.13 or newer** (instructions below)
 - Your **MyGeotab login details** (username, password, and server name)
-- A **Geotab GenAI Gateway API key** — ask Farin to share this with you
+- A **Geotab GenAI Gateway API key** — contact the tool administrator to obtain this
 
 ---
 
@@ -84,7 +84,7 @@ SESSION_SECRET=paste-your-generated-string-here
 
 ### `GENAI_API_KEY`
 
-This is your Geotab GenAI Gateway API key. Ask **Farin Nugraha** (FNUGR01 on Geotab Chat) to share this with you, then paste it in:
+This is your Geotab GenAI Gateway API key. Contact the tool administrator to obtain this, then paste it in:
 
 ```
 GENAI_API_KEY=your-key-here
@@ -173,4 +173,4 @@ When you're done, go back to your terminal window and press **Ctrl + C**.
 
 ## Need Help?
 
-Reach out to **Farin Nugraha** (FNUGR01) on Geotab Chat.
+Contact the tool administrator via Geotab Chat.
