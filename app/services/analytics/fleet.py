@@ -57,12 +57,18 @@ FUEL_GROUP_MAP: dict[str, dict] = {
         "idle_unit": "kWh/h",
         "powertrain": "Electric",
     },
+    # PHEV is dual-fuel: it carries BOTH the liquid side (price_per_unit /
+    # idle_rate) and the electricity side (price_per_unit_elec / idle_rate_elec).
+    # Idling cost sums both components (see analytics/idling.py and USER_GUIDE.md
+    # → Fuel & Idling Settings). Defaults: 2.05/L @ 0.3 L/h + 0.546/kWh @ 1.5 kWh/h.
     "GroupPluginHybridElectricVehicleId": {
         "label": "PHEV",
         "price_per_unit": 2.05,
         "price_unit": "/L",
         "idle_rate": 0.3,
         "idle_unit": "L/h",
+        "price_per_unit_elec": 0.546,
+        "idle_rate_elec": 1.5,
         "powertrain": "Plug-in",
     },
     "GroupFuelCellElectricVehicleId": {
@@ -123,7 +129,11 @@ FUEL_GROUP_MAP: dict[str, dict] = {
     },
 }
 
-# Fallback fuel type for devices not matched to any fuel group
+# Fallback fuel type for devices not matched to any powertrain/fuel group.
+# These price/idle values are effectively inert: devices resolved to group_id
+# "unknown" are EXCLUDED from idle-cost calculations downstream (see
+# analytics/idling.py) and are surfaced only as "unconfigured" vehicles for the
+# user to classify in MyGeotab (USER_GUIDE.md → Fuel & Idling Settings).
 UNKNOWN_FUEL = {
     "label": "Unknown",
     "price_per_unit": 2.15,
@@ -280,6 +290,12 @@ def build_group_tree(groups: list[dict], devices: list[dict]) -> list[dict]:
     result: list[dict] = []
 
     def add_group_and_children(gid: str, level: int):
+        """Recursively append a group and its visible descendants to `result`.
+
+        Skips hidden/system groups (and keyword-matched groups, except the
+        root), recording each group's depth `level` and vehicle count in
+        flattened, name-sorted order.
+        """
         if gid not in group_map:
             return
         if gid in HIDDEN_GROUP_IDS:

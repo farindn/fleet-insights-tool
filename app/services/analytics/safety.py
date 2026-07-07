@@ -7,7 +7,22 @@ import pandas as pd
 
 
 def get_multiplier(count: int) -> float:
-    """Severity multiplier based on event count (from notebook)."""
+    """Severity multiplier that escalates the penalty as event volume rises.
+
+    Repeated violations weigh more heavily: the larger a vehicle's event
+    count, the bigger the multiplier applied to its event rate in
+    ``event_count_score``. The multiplier steps up at the 5 / 15 / 30 / 50
+    event breakpoints:
+
+        count == 0        -> 1.0   (no events)
+        1  <= count <= 5  -> 1.0
+        6  <= count <= 15 -> 1.1
+        16 <= count <= 30 -> 1.2
+        31 <= count <= 50 -> 1.35
+        count > 50        -> 1.5
+
+    See USER_GUIDE.md -> Understanding the Calculations -> Safety Score.
+    """
     if count == 0:
         return 1.0
     if count <= 5:
@@ -114,6 +129,7 @@ def compute_safety_scores(
             for ev in events:
                 dev = ev.get("device", {})
                 dev_id = dev.get("id") if isinstance(dev, dict) else dev
+                # ExceptionEvent.distance is reported in metres; convert to km
                 dist = (ev.get("distance") or 0) / 1000.0
                 if dev_id:
                     seatbelt_dist_by_device[dev_id] = seatbelt_dist_by_device.get(dev_id, 0) + dist
@@ -145,6 +161,9 @@ def compute_safety_scores(
                 weighted_sum += score * w
                 weight_used += w
 
+        # This raw 0-100 safety_score is banded downstream in report_builder.py
+        # into High Risk <60 / Medium 60-75 / Mild 75-90 / Low >=90.
+        # See USER_GUIDE.md -> Understanding the Calculations -> Safety Score.
         if weight_used > 0:
             safety_score = round(weighted_sum / weight_used, 1)
         else:

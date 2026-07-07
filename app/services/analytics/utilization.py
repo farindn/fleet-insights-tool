@@ -187,21 +187,45 @@ def compute_utilization_composite(active_df: pd.DataFrame, trips_df: pd.DataFram
     df["trip_count"] = df["trip_count"].fillna(0).astype(int)
 
     def iqr_score(series: pd.Series) -> pd.Series:
+        """Normalise a fleet metric onto 0-100 while capping extreme outliers.
+
+        Uses a Tukey-fence (IQR) approach so a handful of unusual vehicles
+        don't distort the scale:
+          1. Compute Q1, Q3 and the interquartile range (IQR = Q3 - Q1).
+          2. Clip values to the fence [Q1 - 1.5*IQR, Q3 + 1.5*IQR] (lower
+             bound floored at 0), pulling outliers back to the fence.
+          3. Min-max rescale the clipped values onto 0-100.
+        A degenerate fleet where every value is identical (span == 0) maps to 0.
+        See USER_GUIDE.md -> Understanding the Calculations -> Utilization Score.
+        """
         q1 = series.quantile(0.25)
         q3 = series.quantile(0.75)
         iqr = q3 - q1
+        # Tukey fence: cap extreme outliers before rescaling (lower floored at 0)
         lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
         clipped = series.clip(lower=max(lo, 0), upper=hi)
+        # Min-max normalise the capped values onto a 0-100 scale
         span = clipped.max() - clipped.min()
         if span == 0:
             return pd.Series(np.zeros(len(series)), index=series.index)
         return (clipped - clipped.min()) / span * 100
 
+    # Composite = 0.6 x normalised(distance) + 0.4 x normalised(utilization %).
+    # Distance is weighted more heavily than active-day coverage.
+    # See USER_GUIDE.md -> Understanding the Calculations -> Utilization Score.
     dist_score = iqr_score(df["total_distance_km"])
     days_score = iqr_score(df["utilization_pct"])
     df["composite_score"] = (0.6 * dist_score + 0.4 * days_score).clip(0, 100).round(1)
 
     def assign_tier(score: float) -> str:
+        """Map a composite score to an INTERNAL / LEGACY tier label.
+
+        IMPORTANT: this High / Moderate / Low / Dormant taxonomy is NOT shown
+        in the report. The report's Under / Optimum / Over bands are computed
+        separately, from the fleet's own Q1/Q3 thresholds in report_builder.py
+        (see USER_GUIDE.md -> Understanding the Calculations -> Utilization
+        Score). This ``tier`` column is retained for internal/legacy use only.
+        """
         if score >= 75:
             return "High"
         if score >= 40:
@@ -245,7 +269,9 @@ def extract_gps_points(trips_df: pd.DataFrame) -> list[list[float]]:
 
     pts = trips_df.dropna(subset=["stop_lat", "stop_lon"])
 
-    # Exclude null island (0,0) and invalid coordinates
+    # Exclude out-of-range coordinates and "null island": any point within the
+    # 0.01 deg (~1 km) threshold of (0,0) is treated as a missing/invalid GPS
+    # fix rather than a real stop, and is dropped.
     pts = pts[
         (pts["stop_lat"] >= GPS_VALID_LAT_MIN) & (pts["stop_lat"] <= GPS_VALID_LAT_MAX) &
         (pts["stop_lon"] >= GPS_VALID_LON_MIN) & (pts["stop_lon"] <= GPS_VALID_LON_MAX) &

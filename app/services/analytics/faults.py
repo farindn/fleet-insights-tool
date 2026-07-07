@@ -39,8 +39,9 @@ def dtc_code(fault: dict) -> str | None:
     Returns None for non-OBD faults.
 
     The DTC code can be found in:
-    - fault.diagnostic.code (integer like 71 or pre-formatted string like "P0071")
-    - fault.code (numeric fallback, needs prefix from controller)
+    - fault.diagnostic.code (raw integer fault value, rendered as a 4-digit hex
+      DTC per SAE J2012 — e.g. 768 → "P0300" — or an already-formatted string)
+    - fault.code (numeric fallback, needs the controller prefix)
     """
     controller = fault.get("controller", {})
     ctrl_id = controller.get("id") if isinstance(controller, dict) else controller
@@ -58,7 +59,8 @@ def dtc_code(fault: dict) -> str | None:
             # Check if already formatted string like "P0400"
             if isinstance(diag_code, str) and len(diag_code) >= 4:
                 return diag_code
-            # Otherwise it's an integer - format with prefix
+            # Otherwise it's a raw integer fault value — format as a 4-digit hex
+            # DTC and prepend the controller prefix (SAE J2012), e.g. 768 → "P0300".
             try:
                 code_int = int(diag_code)
                 return f"{prefix}{code_int:04X}"
@@ -75,6 +77,7 @@ def dtc_code(fault: dict) -> str | None:
     except (ValueError, TypeError):
         return None
 
+    # Same 4-digit hex DTC formatting as the diagnostic.code branch above.
     return f"{prefix}{code_int:04X}"
 
 
@@ -84,10 +87,15 @@ def compute_fault_codes(
     top_n: int = 20,
 ) -> pd.DataFrame:
     """
-    Compute top N DTC fault codes across the fleet.
+    Compute the top-N DTC fault codes across the fleet.
 
-    Returns DataFrame: dtc_code, count, description (raw diagnostic name if available).
-    Also returns per-device fault count as a separate series.
+    Returns a DataFrame with columns: dtc_code, count, description (the raw
+    diagnostic name when available).
+
+    NOTE: device_fault_counts is tallied below but NOT returned here — the
+    per-vehicle and per-group fault breakdowns shown in the report are built
+    separately in report_builder.py (which counts all engine faults, decoded or
+    not). "Recurring" (>1 event) banding is likewise applied there.
     """
     device_fault_counts: dict[str, int] = {}
     dtc_counter: Counter = Counter()

@@ -17,9 +17,20 @@ async def generate_report(
     body: GenerateRequest,
     creds: dict = Depends(get_credentials),
 ):
+    """Kick off report generation and return immediately (async, non-blocking).
+
+    Responds 202 Accepted with a ``job_id`` and starts the analytics/AI/render
+    pipeline as a background task. The client then follows progress over SSE and
+    downloads the finished report (see USER_GUIDE.md "Generating & Downloading
+    the Report").
+    """
     job_id = str(uuid.uuid4())
     request_dict = body.model_dump(mode="json")
-    # Convert dates to ISO strings for JSON serialisation in store
+    # Re-stringify the dates explicitly: although model_dump(mode="json") already
+    # coerces date fields, we overwrite with str(...) to guarantee a plain
+    # "YYYY-MM-DD" string in the stored request. The pipeline reads these back via
+    # date.fromisoformat(), so a stable ISO string is required regardless of any
+    # custom field serialisation on the schema.
     request_dict["start_date"] = str(body.start_date)
     request_dict["end_date"] = str(body.end_date)
     # Serialise nested models

@@ -18,9 +18,12 @@ Thumbs.db
 # Generated reports (large, user-specific)
 *.xlsx
 Fleet_Insights_*.html
+Fleet\ Insights_*.html
 fleet_insights.html
 fleet_insight_draft.ipynb
+mockup.html
 
-# IDE
+# IDE / local tooling
 .vscode/
 .idea/
+.claude/

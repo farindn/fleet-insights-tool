@@ -18,7 +18,8 @@ BATTERY_DIAG_LABELS = {
     "DiagnosticBatteryTemperatureId": "Temperature (°C)",
 }
 
-# Fault codes considered as battery health issues
+# Battery-related GO device fault codes counted as battery health issues.
+# The exact per-code meanings come from Geotab diagnostics (not redefined here).
 BATTERY_FAULT_CODES = {131, 290, 135}
 
 
@@ -32,6 +33,12 @@ def compute_battery_health(
 
     Returns DataFrame: device_id, avg_soc, avg_soh, avg_temp, cable_connected_pct, fault_count.
     Devices appear if they have either StatusData or qualifying fault events.
+
+    Note: avg_soc / avg_soh / avg_temp / cable_connected_pct are computed here
+    but are NOT currently displayed in the report; only fault_count feeds it
+    today. The per-vehicle (>1 event) and per-group (>2 events) flag thresholds
+    are applied downstream in report_builder.py.
+    See USER_GUIDE.md -> Understanding the Calculations -> Fault Codes & Battery Health.
     """
     # Count battery faults per device (only codes 131, 290, 135)
     # Code is in diagnostic.code, not fault.code

@@ -35,7 +35,14 @@ class GeotabClient:
         return self._api
 
     async def get(self, type_name: str, **kwargs: Any) -> list[dict]:
-        """Generic get — wraps api.get()."""
+        """Generic entity fetch — wraps the blocking ``api.get()`` on a worker thread.
+
+        ``type_name`` is any MyGeotab entity name (e.g. "Device", "Trip", "Rule",
+        "User", "Diagnostic") and ``kwargs`` are forwarded verbatim as SDK
+        parameters (``search``, ``resultsLimit``, ...). Running the SDK call via
+        ``asyncio.to_thread`` keeps the event loop responsive since the underlying
+        mygeotab client is synchronous.
+        """
         api = self._require_api()
         return await asyncio.to_thread(api.get, type_name, **kwargs)
 
@@ -223,6 +230,11 @@ class GeotabClient:
         Chunks by month to avoid the 50,000 results limit.
         """
         api = self._require_api()
+        # NOTE: naive local-time "now" is used here as the deviceSearch.fromDate
+        # cut-off (active-devices filter). This is inconsistent with get_devices(),
+        # which uses timezone-aware UTC (datetime.now(timezone.utc)). Harmless in
+        # practice — it only bounds which devices count as currently active — but
+        # worth flagging as a naive-vs-aware inconsistency.
         now_utc = datetime.now().isoformat()
         all_data: list[dict] = []
 
@@ -233,6 +245,10 @@ class GeotabClient:
             else:
                 next_month = date(current.year, current.month + 1, 1)
             chunk_start = max(current, from_date)
+            # Last day of the current month: next_month is the 1st of the following
+            # month, so ordinal(next_month) - 1 is the day before it. fromordinal is
+            # a classmethod, so the date(...) it is called on is just a throwaway
+            # receiver — only the ordinal argument matters.
             chunk_end = min(date(next_month.year, next_month.month, 1).fromordinal(next_month.toordinal() - 1), to_date)
 
             chunk = await asyncio.to_thread(
@@ -242,9 +258,13 @@ class GeotabClient:
                 search={
                     "fromDate": datetime.combine(chunk_start, datetime.min.time()).isoformat(),
                     "toDate": datetime.combine(chunk_end, datetime.max.time()).isoformat(),
+                    # Skip faults the user has already dismissed in MyGeotab so counts
+                    # reflect only outstanding/active fault activity.
                     "excludeDismissed": True,
                     "diagnosticSearch": {
                         "sourceSearch": {
+                            # Battery-health faults come from Geotab's own device/system
+                            # sources (see USER_GUIDE.md "Fault Codes & Battery Health").
                             "ids": ["SourceGeotabGoId", "SourceSystemId"],
                         },
                     },
@@ -264,6 +284,9 @@ class GeotabClient:
         Chunks by month to avoid the 50,000 results limit.
         """
         api = self._require_api()
+        # NOTE: naive local-time "now" used as the active-devices cut-off, same as
+        # get_battery_fault_data. Inconsistent with get_devices()'s timezone-aware
+        # UTC — flagged here for the same reason.
         now_utc = datetime.now().isoformat()
         all_data: list[dict] = []
 
@@ -274,6 +297,8 @@ class GeotabClient:
             else:
                 next_month = date(current.year, current.month + 1, 1)
             chunk_start = max(current, from_date)
+            # Last day of the current month (see get_battery_fault_data for the
+            # fromordinal-classmethod explanation of this expression).
             chunk_end = min(date(next_month.year, next_month.month, 1).fromordinal(next_month.toordinal() - 1), to_date)
 
             chunk = await asyncio.to_thread(
@@ -283,9 +308,24 @@ class GeotabClient:
                 search={
                     "fromDate": datetime.combine(chunk_start, datetime.min.time()).isoformat(),
                     "toDate": datetime.combine(chunk_end, datetime.max.time()).isoformat(),
+                    # Ignore user-dismissed faults so DTC counts reflect real activity.
                     "excludeDismissed": True,
                     "diagnosticSearch": {
                         "sourceSearch": {
+                            # Engine / DTC fault sources — the full spread of diagnostic
+                            # protocols and providers that emit trouble codes:
+                            #   SourceAIModelId    — Geotab AI-model-derived diagnostics
+                            #   SourceBrpId        — BRP OEM proprietary
+                            #   SourceGmcccId      — GM OEM proprietary
+                            #   SourceJ1708Id      — SAE J1708 (legacy heavy-duty bus)
+                            #   SourceJ1939Id      — SAE J1939 (heavy-duty CAN bus)
+                            #   SourceLegacyId     — legacy Geotab diagnostics
+                            #   SourceObdId        — OBD-II (light-duty on-board diagnostics)
+                            #   SourceObdSaId      — OBD self-assessment variant
+                            #   SourceProprietaryId— other proprietary sources
+                            #   SourceThirdPartyId — third-party / IOX add-on sources
+                            # Together these back the "Fault Codes" report section
+                            # (see USER_GUIDE.md "Fault Codes & Battery Health").
                             "ids": [
                                 "SourceAIModelId",
                                 "SourceBrpId",
@@ -311,25 +351,40 @@ class GeotabClient:
         return all_data
 
     async def get_rule(self, rule_id: str) -> dict | None:
+        """Look up a single Rule by id; returns the rule dict or None if absent.
+
+        Used to resolve safety exception-rule names (see USER_GUIDE.md
+        "Safety Scorecard Rules").
+        """
         try:
             results = await self.get("Rule", search={"id": rule_id})
             return results[0] if results else None
         except Exception:
+            # Any SDK/network error is treated as "rule not found" rather than
+            # propagated: a missing or unreadable rule should degrade to "no data"
+            # (name shows as unresolved) instead of aborting report generation.
             return None
 
     async def get_all_rules(self) -> list[dict]:
-        """Get all rules in the database."""
+        """Return every Rule in the database (used to populate rule dropdowns)."""
         return await self.get("Rule")
 
     async def get_user(self, username: str) -> dict | None:
-        """Get user info including displayCurrency."""
+        """Look up a User by name; returns the user dict (incl. displayCurrency) or None.
+
+        Backs the auto-detected report currency (see USER_GUIDE.md "Logging In").
+        """
         try:
             results = await self.get("User", search={"name": username})
             return results[0] if results else None
         except Exception:
+            # Swallow errors and return None: currency auto-detection is a
+            # best-effort convenience, so a failed lookup should fall back to the
+            # default rather than break login/config.
             return None
 
     async def resolve_diagnostic(self, diagnostic_id: str) -> dict | None:
+        """Resolve a single Diagnostic id to its full object (code, name, ...) or None."""
         results = await self.get("Diagnostic", search={"id": diagnostic_id})
         return results[0] if results else None
 

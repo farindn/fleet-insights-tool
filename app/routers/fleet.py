@@ -39,6 +39,12 @@ async def list_rules(
     rule_ids: str = Query(..., description="Comma-separated rule IDs"),
     creds: dict = Depends(get_credentials),
 ):
+    """Resolve a comma-separated list of rule IDs to their names.
+
+    Returns one entry per requested id with its ``name`` and a ``found`` flag
+    (False when the rule does not exist in the database). Used to validate/label
+    the safety scorecard rules (see USER_GUIDE.md "Safety Scorecard Rules").
+    """
     client = GeotabClient.from_credentials(creds)
     await client.authenticate()
     ids = [r.strip() for r in rule_ids.split(",") if r.strip()]
@@ -74,6 +80,13 @@ async def list_fuel_types(
     group_id: str = Query(...),
     creds: dict = Depends(get_credentials),
 ):
+    """Detect the fuel types present in a group and their default fuel/idle rates.
+
+    Powers the Fuel & Idling Settings table (see USER_GUIDE.md "Configuring a
+    Report" → "Fuel & Idling Settings"): one row per detected fuel type with a
+    vehicle count and editable default price/idle rate, plus the count and list
+    of vehicles whose powertrain could not be resolved.
+    """
     client = GeotabClient.from_credentials(creds)
     await client.authenticate()
     devices, groups = await asyncio.gather(client.get_devices(), client.get_groups())
@@ -83,7 +96,11 @@ async def list_fuel_types(
     device_fuel_map = detect_fuel_types(group_devices, groups)
     aggregated = aggregate_fuel_type_counts(group_devices, device_fuel_map)
 
-    # Separate configured fuel types from unknown / unconfigured ones
+    # Build the "configured" rows: keep every detected fuel type, skipping the
+    # synthetic "unknown" bucket (those vehicles are reported separately below).
+    # The internal analytics fields price_per_unit / idle_rate are remapped to the
+    # API's default_price / default_idle_rate names — they seed the editable
+    # Price/Unit and Idle Rate inputs the user can override in the UI.
     items = []
     for ft in aggregated:
         if ft["group_id"] == "unknown":
@@ -99,7 +116,9 @@ async def list_fuel_types(
             "default_idle_rate": ft["idle_rate"],
         })
 
-    # Collect vehicles whose fuel type could not be resolved
+    # The other side of the split: vehicles with no valid powertrain assignment
+    # (fuel type "unknown"). These are surfaced so the UI can warn the user; they
+    # are excluded from idling-cost calculations until fixed in MyGeotab.
     unconfigured = []
     for dev in group_devices:
         dev_id = dev.get("id", "")

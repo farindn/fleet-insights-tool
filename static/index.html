@@ -1,9 +1,15 @@
 <!DOCTYPE html>
+<!--
+  Fleet Insights Tool — configuration SPA (served at /).
+  Four screens toggled by static/app.js: (1) Login, (2) Config / "Generate New
+  Report", (3) Generating (SSE progress), (4) Done. Styling: static/style.css
+  (Arkivleet design system). See USER_GUIDE.md for the end-user walkthrough.
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fleet Insight Generator</title>
+<title>Fleet Insights Tool</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,7 +42,7 @@
   <div class="login-box">
     <div class="login-logo">
       <span class="material-symbols-rounded">analytics</span>
-      <span>Fleet Insight</span>
+      <span>Fleet Insights Tool</span>
     </div>
     <p class="login-sub">Report Generator &mdash; Powered by MyGeotab API</p>
 
@@ -85,7 +91,7 @@
     <div class="nav-brand">
       <div class="nav-icon-wrap"><span class="material-symbols-rounded">analytics</span></div>
       <div>
-        <span class="nav-title">Fleet Insight</span>
+        <span class="nav-title">Fleet Insights Tool</span>
         <div class="nav-subtitle">Report Generator</div>
       </div>
     </div>
@@ -170,6 +176,8 @@
         <div class="ig">
           <label>Currency</label>
           <div class="if"><span class="material-symbols-rounded">payments</span>
+            <!-- Currency codes (display only; prefixed to money values). The
+                 default is auto-selected from the user's MyGeotab profile in app.js. -->
             <select id="sel-currency">
               <option value="AED">AED — UAE Dirham</option>
               <option value="ARS">ARS — Argentine Peso</option>
@@ -282,7 +290,7 @@
       </div>
       <div class="hint" style="margin-top:.75rem">
         <span class="material-symbols-rounded">info</span>
-        <span>Default rules (HA, HB, HC) cannot be deleted. Weights auto-calculate but remain adjustable.</span>
+        <span>Add up to 6 exception rules. Only the rules you add here are scored, and their weights must total 100%.</span>
       </div>
     </div>
 
@@ -323,7 +331,7 @@
     <div style="margin-bottom:0.5rem">
       <button id="btn-generate" class="btn-primary" disabled>
         <span class="material-symbols-rounded">rocket_launch</span>
-        Generate Fleet Insight Report
+        Generate Report
       </button>
     </div>
     <div class="pfooter">
@@ -346,7 +354,7 @@
         <div class="nav-brand">
           <div class="nav-icon-wrap"><span class="material-symbols-rounded">analytics</span></div>
           <div>
-            <span class="nav-title">Fleet Insight</span>
+            <span class="nav-title">Fleet Insights Tool</span>
             <div class="nav-subtitle">Report Generator</div>
           </div>
         </div>
@@ -374,7 +382,7 @@
     <div class="nav-brand">
       <div class="nav-icon-wrap"><span class="material-symbols-rounded">analytics</span></div>
       <div>
-        <span class="nav-title">Fleet Insight</span>
+        <span class="nav-title">Fleet Insights Tool</span>
         <div class="nav-subtitle">Report Generator</div>
       </div>
     </div>

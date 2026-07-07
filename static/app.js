@@ -1,4 +1,11 @@
-/* Fleet Insight Generator — SPA state machine */
+/* Fleet Insights Tool — SPA state machine.
+ *
+ * Single-page frontend for the report generator. Four screens (login → config
+ * → generating → done) are toggled by showScreen(); `state` holds the session
+ * token + selections. Flow: authenticate (/api/auth) → load groups/rules/fuel
+ * types → POST /api/generate → stream progress over SSE (/api/progress) →
+ * download the HTML report (/api/download). See USER_GUIDE.md.
+ */
 'use strict';
 
 // ── State ───────────────────────────────────────────────
@@ -31,7 +38,7 @@ const SLIDE_DEFS = [
   ['safety',         'security',          'Safety Overview',        'Risk level distribution across the fleet',            'slides-safety'],
   ['safety',         'warning',           'Safety Events',          'Event type breakdown by rule',                        'slides-safety'],
   ['safety',         'person_alert',      'Bottom-Scoring Vehicles','15 vehicles with the lowest safety scores',           'slides-safety'],
-  ['battery',        'battery_alert',     'Battery Health Trend',   'Monthly low-battery event count',                     'slides-health'],
+  ['battery',        'battery_alert',     'Battery Health',   'Per-vehicle battery fault events',                     'slides-health'],
   ['battery',        'business',          'Battery by Group',       'Which groups are most affected',                      'slides-health'],
   ['faults',         'build',             'Fault Codes',            'Top diagnostic fault codes across the fleet',         'slides-health'],
   ['risk',           'report',            'At-Risk Vehicles',       'Vehicles flagged by multiple risk signals',           'slides-health'],
@@ -54,6 +61,7 @@ const PIPELINE_STEPS = [
 ];
 
 // ── Utility ─────────────────────────────────────────────
+// Show one screen (login | config | generating | done), hiding the others.
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + id).classList.add('active');
@@ -63,6 +71,8 @@ function authHeaders() {
   return { 'Authorization': 'Bearer ' + state.token, 'Content-Type': 'application/json' };
 }
 
+// UNUSED / dead code — retained for reference. Date handling now happens inline
+// in buildDateSelectors() and the generate handler.
 function getMonthYear(mSel, ySel) {
   const m = parseInt(mSel.value, 10); // 1-based
   const y = parseInt(ySel.value, 10);
@@ -107,6 +117,8 @@ function updateWeightBar() {
   fillEl.classList.remove('complete', 'over');
   valEl.classList.remove('complete', 'over');
 
+  // Within ±0.5 of 100 counts as complete (rounding tolerance; mirrors the
+  // backend validator in schemas/generate.py).
   if (Math.abs(total - 100) < 0.5) {
     fillEl.classList.add('complete');
     valEl.classList.add('complete');
@@ -137,8 +149,14 @@ function isPeriodValid() {
   return months > 0;
 }
 
+// Enable "Generate Report" only when all preconditions hold (see USER_GUIDE.md
+// → Generating & Downloading): a group is selected, the period is valid, at
+// least one section is chosen, and — only if Safety & Risk is included — the
+// rule weights total 100%.
 function updateGenerateButton() {
   const weightOk = (() => {
+    // If no Safety & Risk slide is selected the scorecard doesn't apply, so
+    // weights are irrelevant and this check auto-passes.
     const safetySelected = document.querySelectorAll('.slide-checkbox[data-key="safety"]:checked').length > 0;
     if (!safetySelected) return true;
     const inputs = document.querySelectorAll('#rules-tbody .rule-weight-input');
@@ -154,6 +172,9 @@ function updateGenerateButton() {
 }
 
 // ── Slide checkboxes ─────────────────────────────────────
+// Render the report-section selector cards from SLIDE_DEFS, grouped into the
+// six containers (Overview/Utilization/Efficiency/Safety/Health/Summary),
+// de-duplicating by card id. All start checked.
 function buildSlideGrid() {
   // Clear all slide containers first to avoid duplication on re-entry
   ['slides-overview','slides-utilization','slides-efficiency','slides-safety','slides-health','slides-summary'].forEach(id => {
@@ -231,6 +252,8 @@ function rebuildRulesTable() {
   updateAddRuleButton();
 }
 
+// Add one safety-scorecard rule row (max 6), kept in sync between the desktop
+// table and the mobile card layout. Weights must total 100% (see updateWeightBar).
 function addRuleRow(ruleId = '', weight = '') {
   const tbody = document.getElementById('rules-tbody');
   const cardsContainer = document.getElementById('rules-cards');
@@ -455,6 +478,8 @@ document.getElementById('sel-group').addEventListener('change', () => {
   loadFuelTypes();
 });
 
+// Fetch auto-detected fuel types for the selected group and render the fuel
+// settings table; shows a banner for vehicles with no valid powertrain.
 async function loadFuelTypes() {
   const groupId = document.getElementById('sel-group').value;
   const loadingEl = document.getElementById('fuel-loading');
@@ -508,6 +533,9 @@ function getSelectedCurrency() {
   return document.getElementById('sel-currency').value;
 }
 
+// Render the fuel settings rows. Each powertrain gets editable price + idle
+// inputs; PHEV gets dual (electricity + liquid) inputs. The currency prefix is
+// applied live from the currency selector.
 function buildFuelTable(fuelTypes) {
   const tbody = document.getElementById('fuel-tbody');
   const cardsContainer = document.getElementById('fuel-cards');
@@ -815,6 +843,9 @@ document.getElementById('btn-generate').addEventListener('click', async () => {
 
     const isPHEV = tr.dataset.label === 'PHEV';
     if (isPHEV && priceInputs.length >= 2 && idleInputs.length >= 2) {
+      // PHEV is dual-fuel: send both the electricity side (price_per_unit_elec /
+      // idle_rate_elec) and the liquid side. The backend sums both into idle
+      // cost (see schemas/generate.py, analytics/idling.py, USER_GUIDE.md).
       fuelSettings.push({
         group_id: tr.dataset.groupId,
         label: tr.dataset.label,
@@ -896,6 +927,10 @@ document.getElementById('btn-generate').addEventListener('click', async () => {
 });
 
 // ── SSE Progress ─────────────────────────────────────────
+// Subscribe to the server's progress stream and drive the step checklist.
+// `activeSteps`/`doneSteps` track which pipeline steps are running vs finished;
+// a terminal {type:"done"} triggers the report fetch and {type:"error"} aborts.
+// On SSE failure we fall back to polling the download endpoint (see onerror).
 function watchProgress(jobId, req) {
   const es = new EventSource('/api/progress/' + jobId);
   const msgEl = document.getElementById('gen-current-msg');
@@ -966,6 +1001,8 @@ function watchProgress(jobId, req) {
   };
 }
 
+// Download the finished report blob, name it Fleet Insights_<DB>_<period>.html,
+// and show the "Report Ready" screen.
 async function fetchReport(jobId, req) {
   try {
     const resp = await fetch('/api/download/' + jobId, { headers: authHeaders() });

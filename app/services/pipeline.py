@@ -188,7 +188,10 @@ async def run_generation_pipeline(job: JobState) -> None:
 
         # Step 10: AI insights
         emit(job, "ai", "Generating AI insights...")
-        # Build fleet summary for LLM context
+        # Compact, pre-aggregated snapshot of the whole run (headline totals only,
+        # no per-vehicle rows) handed to the LLM as grounding context so each
+        # section's insight and the closing recommendations can cite real numbers
+        # (see USER_GUIDE.md "AI-Generated Insights").
         total_events = sum(len(v) for v in exception_events.values())
         fleet_summary = {
             "group_name": group_name,
@@ -206,6 +209,9 @@ async def run_generation_pipeline(job: JobState) -> None:
             "battery_fault_events": int(battery_df["fault_count"].sum()) if not battery_df.empty else 0,
             "at_risk_vehicles": int((risk_df["flag_count"] > 0).sum()) if not risk_df.empty else 0,
         }
+        # Always request the "recommendations_intro" insight on top of the
+        # user-selected slides: the closing Key Strategic Recommendations section is
+        # not a selectable slide, so it is appended here to guarantee it gets AI text.
         ai_insights, recommendations = await generate_all_insights(fleet_summary, slides + ["recommendations_intro"], language)
         emit(job, "ai", "AI insights generated.", done=True)
 
@@ -269,6 +275,14 @@ async def run_generation_pipeline(job: JobState) -> None:
 
 
 def _done_event():
+    """Build the terminal SSE event signalling successful completion.
+
+    ProgressEvent.to_sse() always serialises ``type: "step"``; the frontend,
+    however, needs a distinct ``type: "done"`` to stop listening. Rather than
+    widen ProgressEvent's contract, we override ``to_sse`` on this one instance
+    (monkey-patch) to emit the terminal payload. See app/jobs/store.py for the
+    canonical SSE type vocabulary.
+    """
     import json
     from app.jobs.store import ProgressEvent
     ev = ProgressEvent(step="done", message="Report generation complete.", done=True)
@@ -277,6 +291,12 @@ def _done_event():
 
 
 def _error_event(msg: str):
+    """Build the terminal SSE event signalling failure.
+
+    Same instance-level ``to_sse`` override rationale as _done_event(): emits
+    ``type: "error"`` (carrying the failure message) instead of the default
+    ``type: "step"`` so the client can surface the error and stop the stream.
+    """
     import json
     from app.jobs.store import ProgressEvent
     ev = ProgressEvent(step="error", message=msg, done=True)

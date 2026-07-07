@@ -17,8 +17,11 @@ SYSTEM_PROMPT = (
     "Maximum 2–3 sentences per insight. Reply only with the insight text, no preamble."
 )
 
+# Per-slide LLM prompts, keyed by slide key (see pipeline.py). Wording uses
+# "group" to match the report and UI (USER_GUIDE.md); unknown keys fall back to
+# a generic prompt in _call_llm.
 SLIDE_INSTRUCTIONS: dict[str, str] = {
-    "portfolio": "Write a 2-3 sentence insight for the Customer Portfolio slide. Mention the number of customer groups, total vehicles, and any unassigned vehicles.",
+    "portfolio": "Write a 2-3 sentence insight for the Group Overview slide. Mention the number of groups, total vehicles, and any unassigned vehicles.",
     "days_driven": "Write a 2-3 sentence insight for the Days Driven slide. Mention the Q1 threshold and how many vehicles are under-deployed.",
     "distance": "Write a 2-3 sentence insight for the Distance Travelled slide. Mention Q1/Q3 thresholds and highlight outliers.",
     "drive_hours": "Write a 2-3 sentence insight for the Driving Duration slide. Mention Q1/Q3 and hours for high/low performers.",
@@ -32,10 +35,10 @@ SLIDE_INSTRUCTIONS: dict[str, str] = {
     "max_speeding": "Write a 2-3 sentence insight for the Max Speeding slide. Mention the top recorded speed, how many vehicles exceeded dangerous thresholds, and the importance of speed management.",
     "safety_bottom15": "Write a 2-3 sentence insight for the Bottom 15 Safety Scores slide. Mention the threshold and coaching priority.",
     "battery": "Write a 2-3 sentence insight for the Battery Health slide. Mention fault event count and vehicles affected.",
-    "battery_customers": "Write a 2-3 sentence insight for the Battery by Customer slide. Mention affected accounts.",
+    "battery_customers": "Write a 2-3 sentence insight for the Battery by Group slide. Mention affected groups.",
     "faults": "Write a 2-3 sentence insight for the Fault Codes slide. Mention top DTC codes and maintenance implications.",
     "risk": "Write a 2-3 sentence insight for the At-Risk Vehicles slide. Mention critical/high vehicles and the 5-factor matrix.",
-    "risk_customers": "Write a 2-3 sentence insight for the At-Risk by Customer slide. Mention which accounts need priority follow-up.",
+    "risk_customers": "Write a 2-3 sentence insight for the At-Risk by Group slide. Mention which groups need priority follow-up.",
 }
 
 
@@ -54,6 +57,13 @@ async def _call_llm(
     context: str,
     language: str,
 ) -> str:
+    """Generate one slide's insight via the LLM.
+
+    Uses the per-slide prompt from SLIDE_INSTRUCTIONS (falling back to a generic
+    prompt for unknown keys). Returns "" on any error so the caller can
+    substitute the template fallback text. language="ms" appends a Bahasa
+    Malaysia instruction.
+    """
     lang_suffix = " Respond in Bahasa Malaysia." if language == "ms" else ""
     instruction = SLIDE_INSTRUCTIONS.get(slide_key, f"Write a 2-3 sentence insight for the {slide_key} slide.")
     user_msg = f"{context}\n\n{instruction}{lang_suffix}"
@@ -80,6 +90,11 @@ async def _call_recommendations(
     language: str,
     n_recs: int = 8,
 ) -> list[str]:
+    """Generate the Key Strategic Recommendations list in a single LLM call.
+
+    Asks for exactly n_recs numbered items and splits them into a list. Returns
+    [] on error (the report then shows no recommendation cards).
+    """
     lang_suffix = " Respond in Bahasa Malaysia." if language == "ms" else ""
     user_msg = (
         f"{context}\n\n"

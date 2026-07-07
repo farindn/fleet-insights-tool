@@ -1,8 +1,27 @@
 <!DOCTYPE html>
+<!--
+  Per-job Fleet Insights report template.
+
+  This is the standalone, self-contained HTML deck produced for a single report
+  job. app/services/report_builder.py -> build_html_report() reads this file
+  verbatim and fills four placeholder tokens via str.replace(). Each token is
+  the name below wrapped in leading and trailing double underscores (the
+  underscores are omitted here on purpose so this comment is NOT itself
+  substituted at build time). Token -> value:
+
+    SLIDES_JSON  JSON array of slide objects -> const SLIDES (drives the deck;
+                 one object per slide, dispatched by its `type` field).
+    DIAG_DATA    JSON object of raw per-vehicle / per-event rows -> const DIAG
+                 (source for the Diagnostic CSV exports).
+    CURRENCY     Currency code string, e.g. "USD" -> const CURRENCY.
+    DB_DISPLAY   MyGeotab database display name -> <title>, top bar, const DB_NAME.
+
+  After substitution the file needs no server to view (maps/fonts load from CDNs).
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fleet Insight | __DB_DISPLAY__</title>
+<title>Fleet Insights Tool | __DB_DISPLAY__</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' rx='10' fill='%2325457B'/><path fill='%23fff' d='M14 34V20h4v14h-4zm8 0V14h4v20h-4zm8 0v-8h4v8h-4z'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -183,7 +202,7 @@ body{display:flex;flex-direction:column}
 </head>
 <body>
 <div id="bar">
-  <div class="logo"><span class="material-symbols-rounded">analytics</span>Fleet Insight <span style="color:rgba(255,255,255,.55);">| __DB_DISPLAY__</span></div>
+  <div class="logo"><span class="material-symbols-rounded">analytics</span>Fleet Insights Tool <span style="color:rgba(255,255,255,.55);">| __DB_DISPLAY__</span></div>
   <div class="diag-wrap">
     <button class="diag-btn" id="diag-btn" onclick="toggleDiagMenu(event)" title="Download diagnostic CSV for data verification">
       <span class="material-symbols-rounded">bug_report</span>Diagnostic CSV
@@ -223,6 +242,8 @@ function toggleDiagMenu(e){
 }
 document.addEventListener('click',()=>document.getElementById('diag-menu').classList.remove('show'));
 
+// RFC 4180 CSV field quoting: wrap in double quotes and double any embedded
+// quotes only when the value contains a comma, quote, or newline; else pass through.
 function csvEscape(v){
   if(v==null)return '';
   const s=String(v);
@@ -244,6 +265,8 @@ function downloadDiagCsv(type){
   const prefix='diag_'+DB_NAME+'_'+period.replace(/[^a-zA-Z0-9_-]/g,'');
 
   if(type==='all'){
+    // Stagger the four downloads (100/200/300ms) instead of firing them at once:
+    // browsers throttle / block rapid multi-file downloads triggered synchronously.
     downloadDiagCsv('vehicles');
     setTimeout(()=>downloadDiagCsv('safety_events'),100);
     setTimeout(()=>downloadDiagCsv('battery_faults'),200);
@@ -317,6 +340,7 @@ function buildMetrics(s){
 }
 
 // ── Cover ─────────────────────────────────────────────────────────────────────
+// Consumes: {line1, line2, line3, db, period}. Static title cover (no insight/metrics).
 function renderCover(s){
   const slide=div('slide on');
   const c=div('cover-slide');
@@ -337,6 +361,7 @@ function renderCover(s){
 }
 
 // ── Portfolio ─────────────────────────────────────────────────────────────────
+// Consumes: s.rows[] = {name, count, pct, unassigned} (+ s.insight, s.metrics). Group distribution table.
 function renderPortfolio(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -363,6 +388,7 @@ function renderPortfolio(s,idx){
 }
 
 // ── Heatmap ───────────────────────────────────────────────────────────────────
+// Consumes: s.gps_points[] = [lat, lon] (passed to initLeaflet) (+ s.metrics). Trip-endpoint heat map.
 function renderHeatmap(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -383,10 +409,11 @@ function initLeaflet(pts){
     let minLat=90,maxLat=-90,minLon=180,maxLon=-180;
     for(const p of pts){minLat=Math.min(minLat,p[0]);maxLat=Math.max(maxLat,p[0]);minLon=Math.min(minLon,p[1]);maxLon=Math.max(maxLon,p[1]);}
     map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[20,20]});
-  }else{map.setView([3.8,109],6);}
+  }else{map.setView([3.8,109],6);} // Fallback centre (~Southeast Asia / Malaysia, lat 3.8 lon 109, zoom 6) used only when there are no GPS points to fit.
 }
 
 // ── Scrollable bar ────────────────────────────────────────────────────────────
+// Consumes: s.bars[] = {label, sub, pct, value, red}; optional s.thr_pct (threshold marker line).
 function renderBarScroll(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -409,6 +436,7 @@ function renderBarScroll(s,idx){
 }
 
 // ── Line-only chart ───────────────────────────────────────────────────────────
+// Consumes: s.line_data[] = {month, [s.line_key]}; optional s.line_key, s.line_label, s.line_color. Single-series line chart.
 function renderLineOnly(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -439,6 +467,10 @@ function renderLineOnly(s,idx){
     });
     // area fill
     const pts=data.map((_,i)=>X(i)+','+Y(vals[i])).join(' ');
+    // DEAD CODE / NO EFFECT (do not remove): on the next line the first
+    // setAttribute('fill', col.replace(...)) derives an rgba() from `col`, but that
+    // result is immediately overwritten by the hard-coded second
+    // setAttribute('fill','rgba(21,101,192,.08)'). The replace(...) chain has no effect.
     const area=document.createElementNS(ns,'polygon'); area.setAttribute('points',pts+' '+(W-PR)+','+(H-PB)+' '+PL+','+(H-PB)); area.setAttribute('fill',col.replace('#','rgba(').replace(/$/,',0.08)').replace('rgba(','rgba(0x').replace(/0x([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})/,(_,r,g,b)=>`${parseInt(r,16)},${parseInt(g,16)},${parseInt(b,16)}`)); area.setAttribute('fill','rgba(21,101,192,.08)'); svg.append(area);
     // line
     const pl=document.createElementNS(ns,'polyline'); pl.setAttribute('points',pts); pl.setAttribute('fill','none'); pl.setAttribute('stroke',col); pl.setAttribute('stroke-width','2.5'); pl.setAttribute('stroke-linejoin','round'); pl.setAttribute('stroke-linecap','round'); svg.append(pl);
@@ -458,6 +490,7 @@ function renderLineOnly(s,idx){
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
+// Consumes: s.cols[] = header strings; s.rows[] = {cells[], flag, row_bg}. Last cell becomes a badge when flag is set.
 function renderTable(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -513,6 +546,7 @@ function renderTable(s,idx){
 }
 
 // ── Donut (standalone, legend right) ─────────────────────────────────────────
+// Consumes: s.donut[] = {label, count, color}; optional s.total, s.donut_sub. Donut chart + legend.
 function renderDonut(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -542,6 +576,7 @@ function renderDonut(s,idx){
 }
 
 // ── Bar+Line (idling) ─────────────────────────────────────────────────────────
+// Consumes: s.data[] = {month, idle_hours, idle_cost_rm}. Idle hours as bars, idle cost as an overlaid line.
 function renderBarLine(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -558,6 +593,9 @@ function renderBarLine(s,idx){
     svg.style.cssText='width:100%;height:100%;';
     const sw=(W-PL-PR)/N, bw=sw*.5;
     const mxH=Math.max(...data.map(d=>d.idle_hours||0))||1;
+    // NOTE: `idle_cost_rm` is a LEGACY key name from the earlier MYR/Ringgit ("rm")
+    // era. The value is a plain number in the report's dynamic CURRENCY (it is NOT
+    // Ringgit-specific); it is rendered below prefixed with the CURRENCY code.
     const mxC=Math.max(...data.map(d=>d.idle_cost_rm||0))||1;
     // horizontal grid
     [0,1,2,3,4].forEach(i=>{
@@ -592,6 +630,7 @@ function renderBarLine(s,idx){
 }
 
 // ── Horizontal bar ─────────────────────────────────────────────────────────────
+// Consumes: s.bars[] = {label, sub, pct, value, value2, color}; optional s.bar_color, s.thr1_pct, s.thr2_pct.
 function renderHbar(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -616,12 +655,15 @@ function renderHbar(s,idx){
 }
 
 // ── Horizontal bar with threshold lines ───────────────────────────────────────
+// Consumes: s.bars[] = {label, sub, pct, value, cls}; optional s.thr1/thr2/thr3 (safety bands, default 60/75/90).
 function renderHbarThreshold(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
   const ins=buildInsight(s); if(ins) slide.append(ins);
   const body=div('s-body'); body.style.paddingTop='14px';
   const list=div('hbar-list');
+  // Safety-score band thresholds (defaults 60 / 75 / 90): High Risk < 60,
+  // Medium 60–<75, Mild 75–<90, Low >= 90 (guide -> "Safety & Risk").
   const t1=s.thr1||60, t2=s.thr2||75, t3=s.thr3||90;
   (s.bars||[]).forEach(b=>{
     const row=div('hbar-row');
@@ -645,6 +687,7 @@ function renderHbarThreshold(s,idx){
 }
 
 // ── Vertical bar (safety events) ──────────────────────────────────────────────
+// Consumes: s.bars[] = {label, value, color}. Vertical bar chart (e.g. safety events per rule).
 function renderVbar(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -688,6 +731,7 @@ function mdBold(str){
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
+// Consumes: s.recs[] = array of strings (markdown **bold** supported). Recommendation cards grid.
 function renderSummary(s,idx){
   const slide=div('slide on');
   slide.append(buildHead(s,idx));
@@ -705,6 +749,7 @@ function renderSummary(s,idx){
 }
 
 // ── Thanks ────────────────────────────────────────────────────────────────────
+// Consumes: nothing from `s` (static closing "Thank You" slide).
 function renderThanks(s){
   const slide=div('slide on');
   const c=div('thanks-slide');

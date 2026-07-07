@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   Arkivleet Design System - Fleet Insight Generator
+   Arkivleet Design System - Fleet Insights Tool
    Based on: arkivleet-design-system.md v1.1.0
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -484,6 +484,12 @@ input, button, textarea, select { font-family: inherit; }
 .hint code {
   word-break: break-all;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⚠ UNUSED / LEGACY — the tree-style group picker below was rolled back.
+   The group selector now uses a simple native <select> (see .if / .if select).
+   These styles are retained for reference only; nothing renders with them.
+   ══════════════════════════════════════════════════════════════════════════ */
 
 /* ═══════════════════════ GROUP PICKER (TREE DROPDOWN) ═══════════════════════ */
 

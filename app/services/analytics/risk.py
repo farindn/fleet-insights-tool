@@ -24,7 +24,7 @@ def compute_at_risk(
     5. high_cost        — idle_cost in top 25%
 
     Returns DataFrame: device_id, name, flags (list[str]), flag_count, risk_level.
-    risk_level: "Critical" (≥3 flags), "Warning" (2), "Monitor" (1), "OK" (0).
+    risk_level: "Critical" (4-5 flags), "High" (3), "Medium" (1-2), "Clean" (0).
     """
     if dormant_days_threshold is None:
         dormant_days_threshold = settings.DORMANT_DAYS_THRESHOLD
@@ -61,6 +61,9 @@ def compute_at_risk(
         if row.get("active_days", 999) < dormant_days_threshold:
             flags.append("dormant")
 
+        # idle_q75 > 0 guard: suppress the flag when the whole-fleet 75th
+        # percentile is zero (otherwise a fleet with little idling would
+        # spuriously flag every vehicle above 0).
         if row.get("idle_hours", 0) > idle_q75 and idle_q75 > 0:
             flags.append("high_idling")
 
@@ -69,18 +72,21 @@ def compute_at_risk(
             if safety < settings.SAFETY_HIGH_RISK:
                 flags.append("low_safety")
 
+        # cost_q75 > 0 guard: as with high_idling, suppress the flag when the
+        # whole-fleet 75th percentile cost is zero. The internal flag key
+        # "high_cost" corresponds to the guide's "High Idle Cost" factor.
         if row.get("idle_cost", 0) > cost_q75 and cost_q75 > 0:
             flags.append("high_cost")
 
         flag_count = len(flags)
-        if flag_count >= 3:
+        if flag_count >= 4:
             risk_level = "Critical"
-        elif flag_count == 2:
-            risk_level = "Warning"
-        elif flag_count == 1:
-            risk_level = "Monitor"
+        elif flag_count == 3:
+            risk_level = "High"
+        elif flag_count >= 1:
+            risk_level = "Medium"
         else:
-            risk_level = "OK"
+            risk_level = "Clean"
 
         rows.append({
             "device_id": dev_id,
@@ -100,8 +106,8 @@ def compute_at_risk(
                  "composite_score", "safety_score", "idle_hours", "idle_cost", "active_days"]
     )
 
-    # Sort: Critical first, then Warning, then Monitor, then OK
-    order = {"Critical": 0, "Warning": 1, "Monitor": 2, "OK": 3}
+    # Sort: Critical first, then High, then Medium, then Clean
+    order = {"Critical": 0, "High": 1, "Medium": 2, "Clean": 3}
     if not result.empty:
         result["_sort"] = result["risk_level"].map(order)
         result = result.sort_values("_sort").drop(columns=["_sort"]).reset_index(drop=True)

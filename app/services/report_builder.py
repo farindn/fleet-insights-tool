@@ -15,9 +15,9 @@ _TEMPLATE_PATH = Path(__file__).parent.parent / "templates" / "report_template.h
 
 RISK_COLORS = {
     "Critical": "#C62828",
-    "Warning": "#EF6C00",
-    "Monitor": "#F9A825",
-    "OK": "#2E7D32",
+    "High": "#EF6C00",
+    "Medium": "#F9A825",
+    "Clean": "#2E7D32",
 }
 
 SAFETY_BAR_COLORS = [
@@ -52,6 +52,11 @@ def _period_str(start: date, end: date) -> str:
 
 
 def _run_ts() -> str:
+    """Report 'generated at' timestamp, localised to Malaysia time (MYT).
+
+    The tool's primary deployment is SEA/Malaysia, so the run timestamp uses
+    Asia/Kuala_Lumpur (falling back to UTC if the tz database is unavailable).
+    """
     from zoneinfo import ZoneInfo
     try:
         now = datetime.now(ZoneInfo("Asia/Kuala_Lumpur"))
@@ -104,6 +109,15 @@ def build_slides_list(
     engine_fault_data: list[dict] | None = None,
     max_speeding_df: pd.DataFrame | None = None,
 ) -> list[dict]:
+    """Assemble the ordered list of slide objects for the report deck.
+
+    Each returned dict is one slide, dispatched by its "type" in the report
+    template's renderer. A section is included only when its key is present in
+    `slides` (and some also require non-empty data). Banding thresholds used
+    throughout (safety 60/75/90, at-risk 4/3/1 factors, utilization Q1/Q3,
+    battery/fault >1 & >2) mirror config.py and USER_GUIDE.md → Understanding
+    the Calculations.
+    """
     period = _period_str(start_date, end_date)
     months_label = _months_label(start_date, end_date)
     month_count = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1
@@ -270,7 +284,10 @@ def build_slides_list(
                 m_df = monthly_df[monthly_df["month"] == month_str]
                 total_dist = m_df["distance_km"].sum()
                 total_hrs = m_df["drive_hours"].sum()
-                # Simple composite: normalize against Q3 thresholds
+                # Monthly composite utilization score (0–100): distance and
+                # drive-hours each normalised against the fleet Q3 threshold,
+                # then combined 60% distance / 40% hours — matching the
+                # per-vehicle composite (USER_GUIDE.md → Utilization Score).
                 dist_score = min(100, total_dist / max(q3_dist * len(udf), 1) * 100)
                 hrs_score = min(100, total_hrs / max(q3_hr * len(udf), 1) * 100)
                 avg_score = round(0.6 * dist_score + 0.4 * hrs_score, 1)
@@ -375,6 +392,9 @@ def build_slides_list(
                     label = dt.strftime("%b %Y")
                 except Exception:
                     label = month_str
+                # NOTE: "idle_cost_rm" is a legacy key name (MYR/Ringgit era).
+                # The value is in the user's selected currency, not Ringgit; the
+                # report template reads this key as-is.
                 idle_monthly.append({"month": label, "idle_hours": round(ih, 1),
                                      "idle_cost_rm": ic})
             # Normalize bar/line pct
@@ -383,10 +403,14 @@ def build_slides_list(
                 x["bar_pct"] = round(x["idle_hours"] / max_ih * 100, 1)
                 x["line_pct"] = x["bar_pct"]
 
-        # Summarise burn rate for display
+        # Summarise burn rate for display (sampled from the first fuel-configured
+        # vehicle; 2.5 / 2.15 are inert fallbacks for an empty fleet). The unit is
+        # taken from the sampled powertrain (L/h, kWh/h, or kg/h) rather than
+        # assumed, so EV/CNG fleets show the correct unit.
         sample_row = idling_df.iloc[0] if not idling_df.empty else {}
         burn_rate = sample_row.get("idle_rate", 2.5) if hasattr(sample_row, "get") else 2.5
         price = sample_row.get("price_per_unit", 2.15) if hasattr(sample_row, "get") else 2.15
+        burn_unit = sample_row.get("idle_unit", "L/h") if hasattr(sample_row, "get") else "L/h"
 
         result.append({
             "type": "bar-line",
@@ -398,7 +422,7 @@ def build_slides_list(
             "data": idle_monthly,
             "metrics": [{"label": "Total Idle Hours", "value": f"{_fmt(total_idle_h)}h"},
                         {"label": "Est. Fuel Waste", "value": f"{currency} {_fmt(total_idle_cost)}"},
-                        {"label": "Burn Rate", "value": f"{burn_rate} L/h"}],
+                        {"label": "Burn Rate", "value": f"{burn_rate} {burn_unit}"}],
         })
 
         # Top 15 idlers hbar - use utilization_df for hours (all vehicles)
@@ -458,7 +482,7 @@ def build_slides_list(
             "insight": ai_insights.get("safety_donut",
                 f"{high_risk} vehicles ({round(high_risk/max(len(safety_df),1)*100)}% of the fleet) are classified as "
                 f"High Risk. A further {med_risk} are Medium Risk — combined, {high_risk+med_risk} vehicles require "
-                "active coaching and account manager follow-up."),
+                "active coaching and fleet manager follow-up."),
             "donut": [
                 {"label": "High Risk",   "count": high_risk,   "color": "#C62828"},
                 {"label": "Medium Risk", "count": med_risk,    "color": "#EF6C00"},
@@ -628,7 +652,7 @@ def build_slides_list(
                         {"label": "Recurring (>1)", "value": str(recurring)}],
         })
 
-        # Battery by customer
+        # Battery by group (internal var names use "customer" = the guide's "group")
         cust_batt: dict[str, dict] = {}
         for _, r in battery_df.iterrows():
             if r["fault_count"] <= 0:
@@ -651,7 +675,7 @@ def build_slides_list(
             "icon": "battery_error",
             "insight": ai_insights.get("battery_customers",
                 f"{len(cust_batt)} groups have vehicles with battery fault events. "
-                "Coordinate directly with affected accounts to schedule maintenance."),
+                "Coordinate directly with affected groups to schedule maintenance."),
             "cols": ["Group", "Total Events", "Vehicles Affected"],
             "rows": cust_batt_rows,
             "metrics": [{"label": "Affected Groups", "value": str(len(cust_batt))},
@@ -763,7 +787,7 @@ def build_slides_list(
             "icon": "car_gear",
             "insight": ai_insights.get("faults_customers",
                 f"{len(cust_faults)} groups have vehicles with fault code events. "
-                "Coordinate directly with affected accounts to schedule maintenance."),
+                "Coordinate directly with affected groups to schedule maintenance."),
             "cols": ["Group", "Total Events", "Vehicles Affected"],
             "rows": cust_fault_rows,
             "metrics": [{"label": "Affected Groups", "value": str(len(cust_faults))},
@@ -772,7 +796,7 @@ def build_slides_list(
 
     # ── 18–19. At-risk ────────────────────────────────────────────────────────
     if "risk" in slide_set and not risk_df.empty:
-        critical = int((risk_df["flag_count"] >= 3).sum())
+        critical = int((risk_df["flag_count"] >= 4).sum())
         high = int((risk_df["flag_count"] == 3).sum())
         medium = int(((risk_df["flag_count"] >= 1) & (risk_df["flag_count"] < 3)).sum())
         clean = int((risk_df["flag_count"] == 0).sum())
@@ -798,7 +822,7 @@ def build_slides_list(
             "icon": "emergency",
             "insight": ai_insights.get("risk",
                 f"Each vehicle is scored 0–5 based on how many risk factors it triggers: "
-                "Utilization Extreme | Unsafe Driving | Fault Codes | High Idling | Battery Drain. "
+                "Low Utilization | Dormant | High Idling | Low Safety | High Idle Cost. "
                 f"{critical} Critical (≥4) and {high} High (3 factors) vehicles require immediate attention."),
             "bars": risk_bars,
             "thr1_pct": 60,
@@ -809,25 +833,25 @@ def build_slides_list(
                         {"label": "Clean (0 factors)", "value": str(clean)}],
         })
 
-        # At-risk by customer
+        # At-risk by group (internal var names use "customer" = the guide's "group")
         cust_risk: dict[str, dict] = {}
         for _, r in risk_df.iterrows():
             dev_id = r["device_id"]
             cust_id = device_customer_map.get(dev_id, "")
             cname = customer_map.get(cust_id, {}).get("name", "UNASSIGNED").upper()
             if cname not in cust_risk:
-                cust_risk[cname] = {"at_risk": 0, "total": 0, "max_level": "OK"}
+                cust_risk[cname] = {"at_risk": 0, "total": 0, "max_level": "Clean"}
             cust_risk[cname]["total"] += 1
-            if r["risk_level"] != "OK":
+            if r["risk_level"] != "Clean":
                 cust_risk[cname]["at_risk"] += 1
-            order = {"Critical": 0, "Warning": 1, "Monitor": 2, "OK": 3}
+            order = {"Critical": 0, "High": 1, "Medium": 2, "Clean": 3}
             if order.get(r["risk_level"], 3) < order.get(cust_risk[cname]["max_level"], 3):
                 cust_risk[cname]["max_level"] = r["risk_level"]
 
         risk_cust_rows = []
         for cname, data in sorted(cust_risk.items(), key=lambda x: -x[1]["at_risk"]):
             level = data["max_level"]
-            flag = "red" if level == "Critical" else ("orange" if level == "Warning" else ("yellow" if level == "Monitor" else "green"))
+            flag = "red" if level == "Critical" else ("orange" if level == "High" else ("yellow" if level == "Medium" else "green"))
             risk_cust_rows.append({
                 "cells": [cname, str(data["at_risk"]), str(data["total"]),
                           data["max_level"]],
