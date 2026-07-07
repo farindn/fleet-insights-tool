@@ -82,7 +82,7 @@ This document's content, including specifications, procedures, and screenshots, 
 - **A Windows or Mac computer** with an internet connection.
 - **Python 3.13 or newer** — used to run the tool locally (installation steps below).
 - **A Geotab GenAI Gateway API key** — required for the AI-written insights and recommendations. Contact the tool administrator to obtain one. *(The report still generates without a key; AI sections fall back to standard descriptive text.)*
-- **Your MyGeotab login details** — username, password, and server name (the part of your MyGeotab URL after `my.geotab.com/`, for example `my744`).
+- **Your MyGeotab login details** — username, password, and your MyGeotab **database name** (the segment after the server host in your MyGeotab URL, e.g. `companyabc` in `my744.geotab.com/companyabc`).
 - **A MyGeotab account with read access** to the group you want to analyse. The account must be able to view devices, groups, trips, exception events, rules, status data, fault data, and diagnostics for that group.
 - **Correct MyGeotab configuration** for full results:
   - **Powertrain & Fuel Type groups** — vehicles must be assigned to the correct Powertrain and Fuel Type groups so idling cost can be calculated. Vehicles without a valid powertrain assignment are excluded from cost calculations (the tool warns you when it detects them).
@@ -210,7 +210,7 @@ To update, download the latest project ZIP (Step 2), extract it, and repeat Step
 | `python` is not recognised (Windows) | Re-run the Python installer and tick **"Add Python to PATH"**. |
 | `No module named uvicorn` | Run `pip install -r requirements.txt` again. |
 | The page doesn't load | Make sure the terminal is still running; also try `http://127.0.0.1:8000`. |
-| "Authentication failed" | Double-check your MyGeotab username, password, and server name. |
+| "Authentication failed" | Double-check your MyGeotab username, password, and database name. |
 
 ---
 

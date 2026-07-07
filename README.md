@@ -1,6 +1,6 @@
 # Fleet Insights Tool
 
-A tool that connects to MyGeotab, analyzes your fleet's data, and generates a report with AI-powered insights — covering utilization, idling costs, safety scores, and vehicle faults.
+A tool that connects to MyGeotab, analyzes your fleet's data, and generates a report with AI-powered insights — covering utilization, idling costs, safety scores, vehicle faults, and battery health.
 
 ---
 
@@ -9,7 +9,7 @@ A tool that connects to MyGeotab, analyzes your fleet's data, and generates a re
 You'll need:
 - A Windows or Mac computer
 - **Python 3.13 or newer** (instructions below)
-- Your **MyGeotab login details** (username, password, and server name)
+- Your **MyGeotab login details** (username, password, and database name)
 - A **Geotab GenAI Gateway API key** — contact the tool administrator to obtain this
 
 ---
@@ -139,14 +139,14 @@ Open any web browser (Chrome, Edge, or Safari) and go to:
 
 **http://localhost:8000**
 
-You should see the Fleet Insights login screen.
+You should see the Fleet Insights Tool login screen.
 
 ---
 
 ## Using the Tool
 
-1. **Log in** with your MyGeotab username, password, and server name
-   > Your server name is the part of your MyGeotab URL after `my.geotab.com/` — for example `my744` or `my3`. If you're not sure, ask your fleet admin.
+1. **Log in** with your MyGeotab username, password, and database name
+   > Your database name is the segment after the server host in your MyGeotab URL — for example `companyabc` in `my744.geotab.com/companyabc`. If you're not sure, ask your fleet admin.
 2. **Select** your fleet group and the date range you want to analyze
 3. Click **Generate Report**
 4. Wait 1–3 minutes while the report is built — you'll see a live progress bar
@@ -167,7 +167,7 @@ When you're done, go back to your terminal window and press **Ctrl + C**.
 | `python` is not recognized (Windows) | Re-run the Python installer and check **"Add Python to PATH"** |
 | `No module named uvicorn` | Run `pip install -r requirements.txt` again |
 | The page doesn't load | Make sure the terminal is still running; also try `http://127.0.0.1:8000` |
-| "Authentication failed" | Double-check your MyGeotab username, password, and server name |
+| "Authentication failed" | Double-check your MyGeotab username, password, and database name |
 
 ---
 
