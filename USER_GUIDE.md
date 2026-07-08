@@ -592,6 +592,7 @@ When a fuel type is detected, the tool pre-fills these defaults. **Prices are in
 - Insights are generated through the **Geotab GenAI Gateway** using a summary of your fleet's figures for the period. The model is instructed to be specific, cite numbers, and use your currency code (not symbols).
 - Insights are **descriptive interpretations of your data**, intended to support — not replace — professional judgement.
 - If the AI service is unavailable (or no API key is configured), the report **still generates**, with each section falling back to standard descriptive text.
+- Sections with **no data** for the period (for example, no fault codes) use the standard descriptive text rather than an AI narrative, so the report never fabricates figures.
 
 ### Data Sources and Variance
 

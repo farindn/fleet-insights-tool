@@ -193,26 +193,49 @@ async def run_generation_pipeline(job: JobState) -> None:
         # section's insight and the closing recommendations can cite real numbers
         # (see USER_GUIDE.md "AI-Generated Insights").
         total_events = sum(len(v) for v in exception_events.values())
+        engine_fault_events = int(fault_df["count"].sum()) if not fault_df.empty else 0
+        battery_fault_events = int(battery_df["fault_count"].sum()) if not battery_df.empty else 0
+        # Count groups the same way the Group Overview slide does (distinct
+        # non-empty groups among vehicles with activity) so the AI's figure
+        # matches the report's "Groups" metric.
+        groups_with_vehicles = {
+            customer_map[cid]["name"].upper()
+            for dev_id in (utilization_df["device_id"].tolist() if not utilization_df.empty else [])
+            if (cid := device_customer_map.get(dev_id)) and cid in customer_map
+        }
         fleet_summary = {
             "group_name": group_name,
             "database": db_display,
             "period": f"{start_date} to {end_date}",
             "currency": currency,
             "total_vehicles": len(group_devices),
-            "customer_groups": len(customer_map),
+            "groups": len(groups_with_vehicles),
             "total_trips": len(trips_df),
             "total_distance_km": round(trips_df["distance_km"].sum(), 0) if not trips_df.empty else 0,
             "total_idle_hours": round(trips_df["idle_hours"].sum(), 1) if not trips_df.empty else 0,
             "total_idle_cost": f"{currency} {round(idling_df['idle_cost'].sum(), 0)}" if not idling_df.empty else f"{currency} 0",
             "total_safety_events": total_events,
             "high_risk_vehicles": int((safety_df["safety_score"] < settings.SAFETY_HIGH_RISK).sum()) if not safety_df.empty else 0,
-            "battery_fault_events": int(battery_df["fault_count"].sum()) if not battery_df.empty else 0,
+            "battery_fault_events": battery_fault_events,
+            "engine_fault_events": engine_fault_events,
             "at_risk_vehicles": int((risk_df["flag_count"] > 0).sum()) if not risk_df.empty else 0,
         }
+        # Guard against the AI narrating sections that have no data (which invites
+        # hallucination — e.g. inventing DTC codes for a fleet with zero faults):
+        # drop empty sections from the AI request so the report uses the accurate
+        # deterministic fallback text instead. Keys not listed always have data.
+        section_empty = {
+            "faults": engine_fault_events == 0,
+            "battery": battery_fault_events == 0,
+            "idling": idling_df.empty or float(idling_df["idle_cost"].sum() or 0) == 0,
+            "risk": risk_df.empty or int((risk_df["flag_count"] > 0).sum()) == 0,
+            "portfolio": len(group_devices) == 0,
+        }
+        ai_slide_keys = [k for k in slides if not section_empty.get(k, False)]
         # Always request the "recommendations_intro" insight on top of the
         # user-selected slides: the closing Key Strategic Recommendations section is
         # not a selectable slide, so it is appended here to guarantee it gets AI text.
-        ai_insights, recommendations = await generate_all_insights(fleet_summary, slides + ["recommendations_intro"], language)
+        ai_insights, recommendations = await generate_all_insights(fleet_summary, ai_slide_keys + ["recommendations_intro"], language)
         emit(job, "ai", "AI insights generated.", done=True)
 
         # Step 11: Render
