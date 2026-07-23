@@ -5,7 +5,6 @@ Mirrors the configuration the SPA collects (see USER_GUIDE.md → Configuring a 
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -42,9 +41,6 @@ class GenerateRequest(BaseModel):
     group_name: str
     start_date: date
     end_date: date
-    # "ms" (Bahasa Malaysia) is accepted by the AI layer; the UI currently
-    # offers English only (see USER_GUIDE.md → Fleet Configuration).
-    language: Literal["en", "ms"] = "en"
     currency: str = "USD"          # display currency code, prefixed to money values
     slides: list[str]             # selected report-section keys (≥1 required)
     safety_rules: list[SafetyRule]

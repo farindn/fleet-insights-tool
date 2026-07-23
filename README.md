@@ -1,6 +1,6 @@
 # Fleet Insights Tool
 
-A tool that connects to MyGeotab, analyzes your fleet's data, and generates a report with AI-powered insights — covering utilization, idling costs, safety scores, vehicle faults, and battery health.
+A tool that connects to MyGeotab, analyzes your fleet's data, and generates a report covering utilization, idling costs, safety scores, vehicle faults, and battery health.
 
 ---
 
@@ -10,7 +10,6 @@ You'll need:
 - A Windows or Mac computer
 - **Python 3.13 or newer** (instructions below)
 - Your **MyGeotab login details** (username, password, and database name)
-- A **Geotab GenAI Gateway API key** — contact the tool administrator to obtain this
 
 ---
 
@@ -66,7 +65,7 @@ The tool uses a settings file called `.env` to store a few private values.
    > **Windows tip:** If you can't see file extensions, open File Explorer, go to **View → Show → File name extensions**, and turn that on.
 
 3. Open your new `.env` file with **Notepad** (Windows) or **TextEdit** (Mac)
-4. Fill in the two values below:
+4. Fill in the value below:
 
 ### `SESSION_SECRET`
 
@@ -82,25 +81,14 @@ Copy the output (a random mix of letters and numbers) and paste it next to `SESS
 SESSION_SECRET=paste-your-generated-string-here
 ```
 
-### `GENAI_API_KEY`
-
-This is your Geotab GenAI Gateway API key. Contact the tool administrator to obtain this, then paste it in:
-
-```
-GENAI_API_KEY=your-key-here
-```
-
 ### Leave everything else as-is
 
-The `GENAI_GATEWAY_URL` and `GENAI_MODEL` values are already set to the right defaults — don't change them.
+The other lines in the file (`JWT_EXPIRE_HOURS`, `JOB_TTL_HOURS`, and the safety/idling thresholds) are optional tuning settings with sensible defaults — don't change them.
 
-Your finished `.env` file should look like this:
+After editing, the top of your `.env` file should look like this (with your own generated secret):
 
 ```
 SESSION_SECRET=a3f8c2d1e4b7f09a2c5d8e1f4b7c0d3a
-GENAI_API_KEY=your-key-here
-GENAI_GATEWAY_URL=https://genai-us.geotab.com/api/v2
-GENAI_MODEL=gemini-2.5-flash-lite
 ```
 
 ---

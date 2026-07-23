@@ -6,6 +6,5 @@ python-jose[cryptography]==3.3.0
 mygeotab>=0.9.1
 pandas>=2.2
 numpy>=1.26
-openai>=1.58.0
 python-dateutil==2.9.0
 python-dotenv>=1.0.1

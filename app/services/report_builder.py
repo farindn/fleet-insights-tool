@@ -103,7 +103,6 @@ def build_slides_list(
     customer_map: dict[str, dict],
     device_customer_map: dict[str, str],
     device_names: dict[str, str],
-    ai_insights: dict[str, str],
     recommendations: list[str],
     battery_fault_data: list[dict] | None = None,
     engine_fault_data: list[dict] | None = None,
@@ -157,10 +156,10 @@ def build_slides_list(
                                "pct": round(unassigned / max(total_vehicles, 1) * 100, 1), "unassigned": True})
         port_rows.sort(key=lambda x: -x["count"])
 
-        insight = ai_insights.get("portfolio", (
+        insight = (
             f"Fleet spans {len(cust_counts)} active groups with {total_vehicles} vehicles "
             f"under telematics monitoring. {unassigned} vehicle(s) are currently unassigned to any group."
-        ))
+        )
 
         result.append({
             "type": "portfolio",
@@ -209,7 +208,7 @@ def build_slides_list(
         result.append({
             "type": "table", "title": f"Days Driven (Last {months_label})",
             "icon": "calendar_month",
-            "insight": ai_insights.get("days_driven",
+            "insight": (
                 f"Total driving days per vehicle over the {months_label}. Vehicles below the Q1 threshold of "
                 f"{int(q1_days)} days are highlighted as under-deployed."),
             "cols": ["Vehicle", "Group", "Days Driven", "Status"],
@@ -238,7 +237,7 @@ def build_slides_list(
         result.append({
             "type": "table", "title": f"Distance Travelled (Last {months_label})",
             "icon": "route",
-            "insight": ai_insights.get("distance",
+            "insight": (
                 f"Total distance per vehicle over the full {months_label}. "
                 f"Red = below Q1 ({_fmt(q1_dist)} km); orange = above Q3 ({_fmt(q3_dist)} km)."),
             "cols": ["Vehicle", "Group", "Distance (km)", "Status"],
@@ -267,7 +266,7 @@ def build_slides_list(
         result.append({
             "type": "table", "title": f"Driving Duration (Last {months_label})",
             "icon": "timer",
-            "insight": ai_insights.get("drive_hours",
+            "insight": (
                 f"Total engine-on driving hours per vehicle over the {months_label}. "
                 f"Red = below Q1 ({q1_hr:.1f} h); orange = above Q3 ({q3_hr:.1f} h)."),
             "cols": ["Vehicle", "Group", "Drive Time (h)", "Status"],
@@ -302,7 +301,7 @@ def build_slides_list(
                 "type": "line-only",
                 "title": f"Fleet Utilization (Last {months_label})",
                 "icon": "show_chart",
-                "insight": ai_insights.get("utilization_trend",
+                "insight": (
                     f"Monthly fleet utilization score (0–100) combining normalized distance and driving duration. "
                     f"Q1={q1_score:.1f}  Q3={q3_score:.1f}."),
                 "line_data": monthly_scores,
@@ -322,7 +321,7 @@ def build_slides_list(
             "type": "donut",
             "title": "Fleet Utilization Distribution",
             "icon": "donut_large",
-            "insight": ai_insights.get("utilization_donut",
+            "insight": (
                 f"{optimum} vehicles ({round(optimum/max(len(udf),1)*100)}%) are within the optimum utilization band. "
                 f"{under} are under-utilized and {over} are over-utilized based on composite score "
                 f"(Q1={q1_score:.1f}–Q3={q3_score:.1f})."),
@@ -356,7 +355,7 @@ def build_slides_list(
             "type": "table",
             "title": "Fleet Utilization by Vehicle",
             "icon": "directions_car",
-            "insight": ai_insights.get("utilization_table",
+            "insight": (
                 f"Composite score (0–100) per vehicle combining days driven, distance, and driving duration. "
                 f"Red = under-utilized (below Q1={q1_score:.1f}); orange = over-utilized (above Q3={q3_score:.1f})."),
             "cols": ["Vehicle", "Group", "Days", "Distance (km)", "Drive (h)", "Score", "Status"],
@@ -416,7 +415,7 @@ def build_slides_list(
             "type": "bar-line",
             "title": f"Idling Duration (Last {months_label})",
             "icon": "local_gas_station",
-            "insight": ai_insights.get("idling",
+            "insight": (
                 f"The fleet accumulated {_fmt(total_idle_h, 0)} idle hours over the period, generating an estimated "
                 f"{currency} {_fmt(total_idle_cost)} in wasted fuel cost at {currency} {price:.2f}/unit and {burn_rate} idle burn rate."),
             "data": idle_monthly,
@@ -450,16 +449,35 @@ def build_slides_list(
                     "value2": f"{currency} {_fmt(ic)}" if ic > 0 else "—",
                     "pct": round(ih / max_h * 100, 1),
                 })
+            # Deterministic top-15 summary for the banner (numbers from top15_df).
+            top15_hours = float(top15_df["total_idle_hours"].sum())
+            top15_cost = float(top15_df["idle_cost"].sum())
+            if not top15_df.empty:
+                worst = top15_df.iloc[0]  # already sorted by idle hours desc
+                top_idler_name = device_names.get(worst["device_id"], worst["device_id"])
+                top_idler_hours = float(worst["total_idle_hours"])
+            else:
+                top_idler_name, top_idler_hours = "—", 0.0
         else:
             hbar_rows = []
+            top15_hours = top15_cost = top_idler_hours = 0.0
+            top_idler_name = "—"
+
+        # Share of the fleet's idle hours attributable to the top 15 (capped at
+        # 100%: bars draw from utilization_df while the fleet-total metric uses
+        # fuel-configured vehicles, so the ratio can round slightly over 100).
+        top15_share = min(100, round(top15_hours / total_idle_h * 100)) if total_idle_h else 0
 
         result.append({
             "type": "hbar",
             "title": f"Idling Duration — Top 15 Vehicles",
             "icon": "hourglass",
-            "insight": ai_insights.get("idling_top15",
-                "The 15 highest-idling vehicles account for a disproportionate share of estimated fuel waste. "
-                "Targeted driver coaching and idle-reduction policies for these vehicles can yield the fastest reduction."),
+            "insight": (
+                f"The top 15 idling vehicles account for {_fmt(top15_hours)} idle hours "
+                f"({top15_share}% of the fleet's {_fmt(total_idle_h)} h) and an estimated "
+                f"{currency} {_fmt(top15_cost)} in wasted fuel/energy. The single worst idler, "
+                f"{top_idler_name}, idled {_fmt(top_idler_hours, 1)} hours — target these vehicles "
+                f"first with driver coaching and idle-reduction policies."),
             "bars": hbar_rows,
             "value2_label": "Est. Cost",
             "bar_color": "#1565C0",
@@ -479,7 +497,7 @@ def build_slides_list(
             "type": "donut",
             "title": f"Safety & Risk (Last {months_label})",
             "icon": "health_and_safety",
-            "insight": ai_insights.get("safety_donut",
+            "insight": (
                 f"{high_risk} vehicles ({round(high_risk/max(len(safety_df),1)*100)}% of the fleet) are classified as "
                 f"High Risk. A further {med_risk} are Medium Risk — combined, {high_risk+med_risk} vehicles require "
                 "active coaching and fleet manager follow-up."),
@@ -516,7 +534,7 @@ def build_slides_list(
             "type": "vbar",
             "title": f"Safety & Risk — Events",
             "icon": "emergency_home",
-            "insight": ai_insights.get("safety_events",
+            "insight": (
                 f"{top_name} is the most frequent safety violation with {_fmt(rule_events[0][1] if rule_events else 0)} events "
                 f"({round(rule_events[0][1]/max(total_events,1)*100) if rule_events else 0}% of all "
                 f"{_fmt(total_events)} recorded events fleet-wide)."),
@@ -542,7 +560,7 @@ def build_slides_list(
                 "type": "vbar",
                 "title": "Safety & Risk — Max Speeding",
                 "icon": "speed",
-                "insight": ai_insights.get("max_speeding",
+                "insight": (
                     f"The top 15 vehicles by maximum recorded speed are shown below. "
                     f"The highest speed recorded was {max_speed_overall} km/h. "
                     f"{over_120} vehicle(s) exceeded 120 km/h, indicating potential high-risk driving behavior."),
@@ -579,7 +597,7 @@ def build_slides_list(
             "type": "hbar-threshold",
             "title": "Safety & Risk — Bottom 15 Vehicles",
             "icon": "e911_emergency",
-            "insight": ai_insights.get("safety_bottom15",
+            "insight": (
                 f"The 15 lowest-scoring vehicles are listed below. Each bar represents a composite safety score (0–100). "
                 f"Vehicles scoring below {int(settings.SAFETY_HIGH_RISK)} are High Risk and require immediate targeted coaching."),
             "bars": safety_bars,
@@ -642,7 +660,7 @@ def build_slides_list(
             "type": "table",
             "title": f"Battery Health (Last {months_label})",
             "icon": "battery_error",
-            "insight": ai_insights.get("battery",
+            "insight": (
                 f"{total_batt_events} battery fault events detected across {affected} vehicles. "
                 f"{recurring} vehicles show recurring battery faults (more than 1 event) and should be prioritised."),
             "cols": ["Vehicle", "Group", "Events", "Fault Names"],
@@ -673,7 +691,7 @@ def build_slides_list(
             "type": "table",
             "title": "Battery Health — Affected Groups",
             "icon": "battery_error",
-            "insight": ai_insights.get("battery_customers",
+            "insight": (
                 f"{len(cust_batt)} groups have vehicles with battery fault events. "
                 "Coordinate directly with affected groups to schedule maintenance."),
             "cols": ["Group", "Total Events", "Vehicles Affected"],
@@ -727,7 +745,7 @@ def build_slides_list(
             "type": "hbar",
             "title": f"Fault Codes (Last {months_label})",
             "icon": "car_gear",
-            "insight": ai_insights.get("faults",
+            "insight": (
                 f"{_fmt(total_faults)} diagnostic fault events recorded across {affected_vehicles} vehicles. "
                 "The chart shows the top DTC codes by frequency — recurring codes indicate maintenance patterns."),
             "bars": fault_bars,
@@ -753,7 +771,7 @@ def build_slides_list(
             "type": "table",
             "title": f"Fault Codes (Last {months_label})",
             "icon": "car_gear",
-            "insight": ai_insights.get("faults_vehicles",
+            "insight": (
                 f"{_fmt(total_faults)} fault events detected across {affected_vehicles} vehicles. "
                 f"{recurring_faults} vehicles show recurring faults (more than 1 event) and should be prioritised."),
             "cols": ["Vehicle", "Group", "Events", "Fault Names"],
@@ -785,7 +803,7 @@ def build_slides_list(
             "type": "table",
             "title": "Fault Codes — Affected Groups",
             "icon": "car_gear",
-            "insight": ai_insights.get("faults_customers",
+            "insight": (
                 f"{len(cust_faults)} groups have vehicles with fault code events. "
                 "Coordinate directly with affected groups to schedule maintenance."),
             "cols": ["Group", "Total Events", "Vehicles Affected"],
@@ -820,7 +838,7 @@ def build_slides_list(
             "type": "hbar",
             "title": f"At-Risk Vehicles (Last {months_label})",
             "icon": "emergency",
-            "insight": ai_insights.get("risk",
+            "insight": (
                 f"Each vehicle is scored 0–5 based on how many risk factors it triggers: "
                 "Low Utilization | Dormant | High Idling | Low Safety | High Idle Cost. "
                 f"{critical} Critical (≥4) and {high} High (3 factors) vehicles require immediate attention."),
@@ -862,7 +880,7 @@ def build_slides_list(
             "type": "table",
             "title": "At-Risk Vehicles — Affected Groups",
             "icon": "emergency",
-            "insight": ai_insights.get("risk_customers",
+            "insight": (
                 f"At-risk vehicles are distributed across {len(cust_risk)} groups. "
                 "Prioritise groups with the highest at-risk vehicle counts."),
             "cols": ["Group", "At-Risk Vehicles", "Total Vehicles", "Top Risk Flag"],
@@ -877,9 +895,9 @@ def build_slides_list(
             "type": "summary",
             "title": "Key Strategic Recommendations",
             "icon": "lightbulb",
-            "insight": ai_insights.get("recommendations_intro",
-                f"The following {len(recommendations)} recommendations are auto-generated from "
-                f"{month_count} months of fleet data. Each insight is directly tied to a measurable data signal."),
+            "insight": (
+                f"The following {len(recommendations)} recommendations are derived directly from "
+                f"{month_count} months of fleet data. Each one is tied to a specific, measurable data signal."),
             "recs": recommendations,
             "metrics": [{"label": "Insights", "value": str(len(recommendations))},
                         {"label": "Period", "value": months_label}],

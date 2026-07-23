@@ -19,7 +19,7 @@ async def generate_report(
 ):
     """Kick off report generation and return immediately (async, non-blocking).
 
-    Responds 202 Accepted with a ``job_id`` and starts the analytics/AI/render
+    Responds 202 Accepted with a ``job_id`` and starts the analytics/render
     pipeline as a background task. The client then follows progress over SSE and
     downloads the finished report (see USER_GUIDE.md "Generating & Downloading
     the Report").

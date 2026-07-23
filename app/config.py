@@ -3,7 +3,7 @@
 All settings load from environment variables (or a local ``.env`` file — see
 ``.env.example``). The values here are the in-code fallbacks used when a
 variable is not set. See USER_GUIDE.md → Installation & Setup → Configure the
-Tool for the two values a user must supply (``SESSION_SECRET``, ``GENAI_API_KEY``).
+Tool for the value a user must supply (``SESSION_SECRET``).
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,17 +16,6 @@ class Settings(BaseSettings):
     # Signs the session JWT. The default is for LOCAL DEV ONLY — generate a
     # unique value in production (README / USER_GUIDE.md → Configure the Tool).
     SESSION_SECRET: str = "dev-secret-change-me-in-production-32x"
-    # Geotab GenAI Gateway API key. If blank, AI insights are skipped and the
-    # report falls back to static text (USER_GUIDE.md → AI-Generated Insights).
-    GENAI_API_KEY: str = ""
-
-    # ── AI Gateway ──────────────────────────────────────────────────────
-    # Defaults target the Geotab GenAI Gateway with gemini-2.5-flash-lite,
-    # matching .env.example and USER_GUIDE.md. Override via .env if required.
-    GENAI_GATEWAY_URL: str = "https://genai-us.geotab.com/api/v2"
-    GENAI_MODEL: str = "gemini-2.5-flash-lite"
-    GENAI_MAX_TOKENS: int = 512        # per-slide insight token cap
-    GENAI_RECS_MAX_TOKENS: int = 2048  # recommendations token cap (longer output)
 
     # ── Auth ────────────────────────────────────────────────────────────
     JWT_EXPIRE_HOURS: int = 4          # session token lifetime (USER_GUIDE.md → Logging In)

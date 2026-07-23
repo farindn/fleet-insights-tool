@@ -43,7 +43,7 @@ const SLIDE_DEFS = [
   ['faults',         'build',             'Fault Codes',            'Top diagnostic fault codes across the fleet',         'slides-health'],
   ['risk',           'report',            'At-Risk Vehicles',       'Vehicles flagged by multiple risk signals',           'slides-health'],
   ['risk',           'groups',            'At-Risk by Group',       'Group impact of at-risk vehicles',                    'slides-health'],
-  ['recommendations','lightbulb',         'Key Recommendations',    'AI-generated strategic action items',                 'slides-summary'],
+  ['recommendations','lightbulb',         'Key Recommendations',    'Data-driven strategic action items',                  'slides-summary'],
 ];
 
 const PIPELINE_STEPS = [
@@ -56,7 +56,7 @@ const PIPELINE_STEPS = [
   {key:'battery',     label:'Checking battery health'},
   {key:'faults',      label:'Processing fault codes'},
   {key:'risk',        label:'Building risk matrix'},
-  {key:'ai',          label:'Generating AI insights'},
+  {key:'recommendations', label:'Compiling recommendations'},
   {key:'render',      label:'Rendering HTML report'},
 ];
 
@@ -886,7 +886,6 @@ document.getElementById('btn-generate').addEventListener('click', async () => {
     group_name: groupName,
     start_date: fmt(startDate),
     end_date: fmt(endDate),
-    language: document.getElementById('sel-language').value,
     currency: document.getElementById('sel-currency').value,
     slides: slideKeys,
     safety_rules: rules,

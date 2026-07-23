@@ -58,7 +58,7 @@
   - [At-Risk Matrix](#at-risk-matrix)
   - [Fault Codes & Battery Health](#fault-codes--battery-health)
   - [Default Fuel Prices & Idle Rates](#default-fuel-prices--idle-rates)
-  - [AI-Generated Insights](#ai-generated-insights)
+  - [Insights & Recommendations](#insights--recommendations)
   - [Data Sources and Variance](#data-sources-and-variance)
 
 > 🖼️ **Screenshots:** Lines that begin with 🖼️ are placeholders. Replace each with the actual screenshot; a suggested filename under `docs/screenshots/` is provided for each.
@@ -67,7 +67,7 @@
 
 ## 1. Introduction
 
-Fleet Insights Tool is a reporting tool that connects to your MyGeotab database, analyses your fleet's activity over a period you choose, and produces a polished, shareable **HTML report** enriched with AI-generated insights. A single report covers fleet **utilization**, **idling cost**, **driver safety and risk**, **vehicle fault codes**, and **battery health**, and closes with **strategic recommendations**.
+Fleet Insights Tool is a reporting tool that connects to your MyGeotab database, analyses your fleet's activity over a period you choose, and produces a polished, shareable **HTML report**. A single report covers fleet **utilization**, **idling cost**, **driver safety and risk**, **vehicle fault codes**, and **battery health**, and closes with **strategic recommendations**.
 
 Unlike a MyGeotab add-in, Fleet Insights Tool runs as a small web application on your own computer. You start it locally, open it in your browser, log in with your MyGeotab credentials, configure the report, and download a self-contained HTML file that you can open or share with anyone.
 
@@ -81,7 +81,6 @@ This document's content, including specifications, procedures, and screenshots, 
 
 - **A Windows or Mac computer** with an internet connection.
 - **Python 3.13 or newer** — used to run the tool locally (installation steps below).
-- **A Geotab GenAI Gateway API key** — required for the AI-written insights and recommendations. Contact the tool administrator to obtain one. *(The report still generates without a key; AI sections fall back to standard descriptive text.)*
 - **Your MyGeotab login details** — username, password, and your MyGeotab **database name** (the segment after the server host in your MyGeotab URL, e.g. `companyabc` in `my744.geotab.com/companyabc`).
 - **A MyGeotab account with read access** to the group you want to analyse. The account must be able to view devices, groups, trips, exception events, rules, status data, fault data, and diagnostics for that group.
 - **Correct MyGeotab configuration** for full results:
@@ -148,15 +147,10 @@ python -c "import secrets; print(secrets.token_hex(16))"
 
 Copy the output and paste it after `SESSION_SECRET=`.
 
-**`GENAI_API_KEY`** — your Geotab GenAI Gateway API key (from the tool administrator). Paste it after `GENAI_API_KEY=`.
-
-**Leave everything else as-is.** `GENAI_GATEWAY_URL` and `GENAI_MODEL` are already set to the correct defaults. A finished `.env` looks like this:
+**Leave everything else as-is.** The remaining entries (`JWT_EXPIRE_HOURS`, `JOB_TTL_HOURS`, and the safety/idling thresholds) are optional tuning settings with sensible defaults. A finished `.env` looks like this:
 
 ```
 SESSION_SECRET=a3f8c2d1e4b7f09a2c5d8e1f4b7c0d3a
-GENAI_API_KEY=your-key-here
-GENAI_GATEWAY_URL=https://genai-us.geotab.com/api/v2
-GENAI_MODEL=gemini-2.5-flash-lite
 ```
 
 ### Step 4 — Install Required Packages
@@ -263,15 +257,14 @@ A hint below the selectors confirms the exact window, e.g. *"Analysis period: Ja
 
 ### Fleet Configuration
 
-> 🖼️ **[Screenshot: Fleet Configuration section — Group, Report Language, and Currency dropdowns]** — `docs/screenshots/04-fleet-config.png`
+> 🖼️ **[Screenshot: Fleet Configuration section — Group and Currency dropdowns]** — `docs/screenshots/04-fleet-config.png`
 
 - **Group** — the fleet group to analyse. Each option shows the group name and its vehicle count, e.g. *"Company Group (128 vehicles)."* **Subgroups are automatically included.** The tool defaults to your top-level **Company Group** (the whole fleet) when available.
-- **Report Language** — the language for AI-generated insights. **English** is the standard option.
 - **Currency** — the currency used throughout the report. It is **auto-detected from your MyGeotab profile** and can be changed. The currency is shown as a code (e.g. `MYR`, `IDR`, `USD`) beside monetary values.
 
 ### Report Sections
 
-Choose which content to include. A table of contents is generated automatically inside the report, and every included section carries an AI-written insight.
+Choose which content to include. A table of contents is generated automatically inside the report, and every included section carries a data-driven insight.
 
 > 🖼️ **[Screenshot: Report Sections selector with the grouped slide cards and "Select All / Clear All"]** — `docs/screenshots/05-report-sections.png`
 
@@ -345,7 +338,7 @@ A full-screen overlay shows live progress while the tool fetches and processes y
 7. Checking battery health
 8. Processing fault codes
 9. Building risk matrix
-10. Generating AI insights
+10. Compiling recommendations
 11. Rendering HTML report
 
 > 🖼️ **[Screenshot: Generation overlay with the step list in progress]** — `docs/screenshots/08-generating.png`
@@ -372,11 +365,11 @@ The report opens on a cover slide and is navigated like a slide deck. Sections a
 
 ### Navigating the Report
 
-> 🖼️ **[Screenshot: A report slide showing the title bar, navigation arrows, and an AI insight banner]** — `docs/screenshots/10-report-nav.png`
+> 🖼️ **[Screenshot: A report slide showing the title bar, navigation arrows, and an insight banner]** — `docs/screenshots/10-report-nav.png`
 
 - Move between slides using the **on-screen arrows** or the **arrow keys** (Left/Right/Up/Down).
 - The **title bar** shows *"Fleet Insights Tool | \<database\>"*.
-- Most sections display a blue **insight banner** — a short, AI-written interpretation of that section's data — and a strip of up to four **stat cards** summarising the key numbers.
+- Most sections display a blue **insight banner** — a short, plain-language interpretation of that section's data — and a strip of up to four **stat cards** summarising the key numbers.
 - A **Diagnostic CSV** menu in the top bar exports the underlying per-vehicle data (see [Exporting Diagnostic CSVs](#exporting-diagnostic-csvs)).
 
 ### Cover
@@ -471,7 +464,7 @@ A composite view that flags vehicles triggering **multiple** risk signals at onc
 
 ### Key Strategic Recommendations
 
-A closing grid of AI-written, prioritised action items drawn from the whole report — each with a bold title and a short, data-referenced rationale. Cards: Insights (count), Period.
+A closing grid of data-driven, prioritised action items drawn from the whole report — each with a bold title and a short, data-referenced rationale. Cards: Insights (count), Period.
 
 > 🖼️ **[Screenshot: Key Strategic Recommendations grid]** — `docs/screenshots/19-recommendations.png`
 
@@ -588,13 +581,13 @@ When a fuel type is detected, the tool pre-fills these defaults. **Prices are in
 
 > The currency prefix shown next to each price is whatever you select in **Fuel Configuration → Currency**. Vehicles with no valid powertrain assignment are excluded from cost calculations.
 
-### AI-Generated Insights
+### Insights & Recommendations
 
-- Each report section includes a short, AI-written insight, and the report closes with a set of strategic recommendations.
-- Insights are generated through the **Geotab GenAI Gateway** using a summary of your fleet's figures for the period. The model is instructed to be specific, cite numbers, and use your currency code (not symbols).
+- Each report section includes a short insight banner, and the report closes with a set of **Key Strategic Recommendations**.
+- Every insight and recommendation is **computed directly from your fleet's own figures** for the period — there is no AI or external service involved, so the same data always produces the same text. All monetary values use your selected currency code (not symbols).
 - Insights are **descriptive interpretations of your data**, intended to support — not replace — professional judgement.
-- If the AI service is unavailable (or no API key is configured), the report **still generates**, with each section falling back to standard descriptive text.
-- Sections with **no data** for the period (for example, no fault codes) use the standard descriptive text rather than an AI narrative, so the report never fabricates figures.
+- Each recommendation is tied to a specific, measurable data signal (at-risk vehicles, under-utilization, idling cost, safety, speeding, battery, fault codes, and unassigned vehicles), ordered most-urgent first.
+- Sections with **no data** for the period (for example, no fault codes) simply omit that figure rather than inventing one, so the report never fabricates numbers. If no risk signals fire at all, the recommendations close with a single positive "Fleet Health" summary.
 
 ### Data Sources and Variance
 
