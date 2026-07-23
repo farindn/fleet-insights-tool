@@ -501,13 +501,15 @@ Each vehicle receives a composite utilization score from 0 to 100:
 
 ```
 Active Days      = number of distinct calendar days the vehicle started a trip
-Total Days       = (End Date − Start Date) + 1
-Utilization %    = Active Days ÷ Total Days × 100
 
-Composite Score  = 0.6 × normalised(Distance) + 0.4 × normalised(Utilization %)
+Factor 1  = Active Days      ÷ MAX(Active Days in fleet)      × 100
+Factor 2  = Total Distance   ÷ MAX(Total Distance in fleet)   × 100
+Factor 3  = Total Drive Time ÷ MAX(Total Drive Time in fleet) × 100
+
+Composite Score  = AVERAGE(Factor 1, Factor 2, Factor 3)
 ```
 
-`normalised(…)` places each vehicle on a 0–100 scale relative to the fleet, using an interquartile (IQR) method that caps extreme outliers so a few unusual vehicles don't distort the scale. Vehicles are then banded **Under / Optimum / Over** using the fleet's own **Q1 (25th percentile)** and **Q3 (75th percentile)** thresholds for each metric.
+Each factor expresses a vehicle's performance as a percentage of the best-performing vehicle in the fleet for that metric. The three factors are weighted equally. A vehicle that tops the fleet on all three metrics scores 100; one that is inactive scores 0. Vehicles are then banded **Under / Optimum / Over** using the fleet's own **Q1 (25th percentile)** and **Q3 (75th percentile)** of the composite scores.
 
 ### Idling Cost
 

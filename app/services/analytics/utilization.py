@@ -160,9 +160,12 @@ def compute_monthly_kpis(trips_df: pd.DataFrame) -> pd.DataFrame:
 
 def compute_utilization_composite(active_df: pd.DataFrame, trips_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Composite utilization score 0–100 using IQR-based bucketing of distance + active days.
-    Returns active_df enriched with: total_distance_km, total_drive_hours, total_idle_hours,
-    trip_count, composite_score, tier.
+    Composite utilization score 0–100: the equal-weighted average of three
+    factors — total distance, total drive-hours, and active days — each
+    max-normalised against the fleet's best-performing vehicle for that metric
+    (see max_norm below). Returns active_df enriched with: total_distance_km,
+    total_drive_hours, total_idle_hours, trip_count, composite_score, tier.
+    See USER_GUIDE.md -> Understanding the Calculations -> Utilization Score.
     """
     if trips_df.empty:
         active_df["total_distance_km"] = 0.0
@@ -186,36 +189,27 @@ def compute_utilization_composite(active_df: pd.DataFrame, trips_df: pd.DataFram
     df["total_idle_hours"] = df["total_idle_hours"].fillna(0.0)
     df["trip_count"] = df["trip_count"].fillna(0).astype(int)
 
-    def iqr_score(series: pd.Series) -> pd.Series:
-        """Normalise a fleet metric onto 0-100 while capping extreme outliers.
+    def max_norm(series: pd.Series) -> pd.Series:
+        """Normalise a fleet metric onto 0–100 by dividing by the fleet maximum.
 
-        Uses a Tukey-fence (IQR) approach so a handful of unusual vehicles
-        don't distort the scale:
-          1. Compute Q1, Q3 and the interquartile range (IQR = Q3 - Q1).
-          2. Clip values to the fence [Q1 - 1.5*IQR, Q3 + 1.5*IQR] (lower
-             bound floored at 0), pulling outliers back to the fence.
-          3. Min-max rescale the clipped values onto 0-100.
-        A degenerate fleet where every value is identical (span == 0) maps to 0.
+        Each vehicle's value is expressed as a fraction of the best-performing
+        vehicle (the fleet MAX), then scaled to 0–100. A fleet where every
+        vehicle has the same value maps to 100 (all at maximum). A zero-max
+        fleet maps to 0.
         See USER_GUIDE.md -> Understanding the Calculations -> Utilization Score.
         """
-        q1 = series.quantile(0.25)
-        q3 = series.quantile(0.75)
-        iqr = q3 - q1
-        # Tukey fence: cap extreme outliers before rescaling (lower floored at 0)
-        lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-        clipped = series.clip(lower=max(lo, 0), upper=hi)
-        # Min-max normalise the capped values onto a 0-100 scale
-        span = clipped.max() - clipped.min()
-        if span == 0:
+        max_val = series.max()
+        if max_val == 0:
             return pd.Series(np.zeros(len(series)), index=series.index)
-        return (clipped - clipped.min()) / span * 100
+        return (series / max_val * 100).clip(0, 100)
 
-    # Composite = 0.6 x normalised(distance) + 0.4 x normalised(utilization %).
-    # Distance is weighted more heavily than active-day coverage.
+    # Composite = AVERAGE(distance/max_distance, drive_hours/max_drive_hours, active_days/max_active_days)
+    # Each factor is normalised to 0–100 against the fleet MAX, then averaged equally.
     # See USER_GUIDE.md -> Understanding the Calculations -> Utilization Score.
-    dist_score = iqr_score(df["total_distance_km"])
-    days_score = iqr_score(df["utilization_pct"])
-    df["composite_score"] = (0.6 * dist_score + 0.4 * days_score).clip(0, 100).round(1)
+    dist_score = max_norm(df["total_distance_km"])
+    hours_score = max_norm(df["total_drive_hours"])
+    days_score = max_norm(df["active_days"])
+    df["composite_score"] = ((dist_score + hours_score + days_score) / 3).clip(0, 100).round(1)
 
     def assign_tier(score: float) -> str:
         """Map a composite score to an INTERNAL / LEGACY tier label.
