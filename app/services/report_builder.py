@@ -1069,16 +1069,17 @@ def build_html_report(
     slides: list[dict],
     db_display: str,
     currency: str = "USD",
-    diagnostic_data: dict | None = None,
 ) -> str:
-    """Inject slides JSON and diagnostic data into the HTML template."""
+    """Inject the slides JSON and display values into the HTML template.
+
+    Diagnostic rows are no longer embedded here; they are kept on the job and
+    served separately as CSVs via the diagnostics ZIP endpoint.
+    """
     template = _TEMPLATE_PATH.read_text(encoding="utf-8")
     slides_json = json.dumps(slides, ensure_ascii=False, default=str)
-    diag_json = json.dumps(diagnostic_data or {}, ensure_ascii=False, default=str)
     html = (
         template
         .replace("__SLIDES_JSON__", slides_json)
-        .replace("__DIAG_DATA__", diag_json)
         .replace("__DB_DISPLAY__", db_display)
         .replace("__CURRENCY__", currency)
     )

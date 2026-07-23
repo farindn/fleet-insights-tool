@@ -63,6 +63,10 @@ class JobState:
     pending_events: list[ProgressEvent] = field(default_factory=list)
     result_html: str | None = None
     error: str | None = None
+    # Raw diagnostic rows (per-vehicle summary + safety/battery/engine events)
+    # kept server-side so the /api/download/{job_id}/diagnostics.zip endpoint can
+    # build the diagnostic CSVs on demand. No longer embedded in result_html.
+    diagnostic_data: dict | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
 

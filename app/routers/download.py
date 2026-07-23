@@ -5,13 +5,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 
 from app.jobs.store import get_job
+from app.services.diagnostics_export import report_basename
 
 router = APIRouter()
-
-
-def _yymmdd(iso: str) -> str:
-    """'2026-01-31' → '260131' (drop the century, strip dashes)."""
-    return iso[2:].replace("-", "") if iso else ""
 
 
 @router.get("/api/download/{job_id}")
@@ -31,11 +27,9 @@ async def download_report(job_id: str):
     if job.status != "done" or not job.result_html:
         raise HTTPException(status_code=409, detail="Report not ready")
 
-    # Reconstruct the documented filename from the database (credentials) and
-    # the analysis window (request); each part degrades gracefully if missing.
-    db = (job.credentials.get("database") or "report").upper()
-    period = f"{_yymmdd(job.request.get('start_date', ''))}-{_yymmdd(job.request.get('end_date', ''))}"
-    filename = f"Fleet Insights_{db}_{period}.html"
+    # Filename convention is centralised in diagnostics_export.report_basename so
+    # the HTML report and the diagnostics ZIP always share the same name stem.
+    filename = f"{report_basename(job)}.html"
     return Response(
         content=job.result_html.encode("utf-8"),
         media_type="text/html",

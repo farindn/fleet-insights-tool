@@ -1012,6 +1012,9 @@ async function fetchReport(jobId, req) {
     const filename = 'Fleet Insights_' + dbName + '_' + periodCode + '.html';
     state.reportBlob = blob;
     state.reportFilename = filename;
+    // Diagnostic CSVs are fetched on demand (not embedded in the report); stash
+    // the matching ZIP name for the "Download All (ZIP)" button on the Done screen.
+    state.diagZipFilename = 'Fleet Insights_' + dbName + '_' + periodCode + '_diagnostics.zip';
 
     // Update done screen
     document.getElementById('done-group').textContent = req.group_name;
@@ -1026,21 +1029,51 @@ async function fetchReport(jobId, req) {
 }
 
 // ── Done screen actions ───────────────────────────────────
+// Trigger a browser download for an in-memory Blob (object-URL + synthetic
+// click), revoking the URL shortly after. Shared by the report and ZIP buttons.
+function downloadBlobAs(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 document.getElementById('btn-download').addEventListener('click', () => {
   if (!state.reportBlob) {
     showNotify('error', 'Download Failed', 'Report file is not available. Please generate a new report.');
     return;
   }
   try {
-    const url = URL.createObjectURL(state.reportBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = state.reportFilename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    downloadBlobAs(state.reportBlob, state.reportFilename);
     showNotify('success', 'Download Started', 'Your report is being downloaded as ' + state.reportFilename);
   } catch (e) {
     showNotify('error', 'Download Failed', 'Could not download the report: ' + e.message);
+  }
+});
+
+// Fetch the diagnostic CSVs (built server-side while the job lives) and download
+// them as a single ZIP. Must be fetch+blob, not a plain <a href>, so the request
+// carries the same auth headers as the rest of the SPA.
+document.getElementById('btn-download-zip').addEventListener('click', async () => {
+  if (!state.jobId) {
+    showNotify('error', 'Download Failed', 'No report is available. Please generate a new report.');
+    return;
+  }
+  const btn = document.getElementById('btn-download-zip');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/download/' + state.jobId + '/diagnostics.zip', { headers: authHeaders() });
+    if (!resp.ok) throw new Error('Diagnostics not available (status ' + resp.status + ')');
+    const blob = await resp.blob();
+    const filename = state.diagZipFilename || 'Fleet Insights_diagnostics.zip';
+    downloadBlobAs(blob, filename);
+    showNotify('success', 'Download Started', 'Diagnostic CSVs are being downloaded as ' + filename + '.');
+  } catch (e) {
+    showNotify('error', 'Download Failed', 'Could not download the diagnostic CSVs: ' + e.message);
+  } finally {
+    btn.disabled = false;
   }
 });
 

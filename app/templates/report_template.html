@@ -4,15 +4,13 @@
 
   This is the standalone, self-contained HTML deck produced for a single report
   job. app/services/report_builder.py -> build_html_report() reads this file
-  verbatim and fills four placeholder tokens via str.replace(). Each token is
+  verbatim and fills three placeholder tokens via str.replace(). Each token is
   the name below wrapped in leading and trailing double underscores (the
   underscores are omitted here on purpose so this comment is NOT itself
   substituted at build time). Token -> value:
 
     SLIDES_JSON  JSON array of slide objects -> const SLIDES (drives the deck;
                  one object per slide, dispatched by its `type` field).
-    DIAG_DATA    JSON object of raw per-vehicle / per-event rows -> const DIAG
-                 (source for the Diagnostic CSV exports).
     CURRENCY     Currency code string, e.g. "USD" -> const CURRENCY.
     DB_DISPLAY   MyGeotab database display name -> <title>, top bar, const DB_NAME.
 
@@ -185,41 +183,11 @@ body{display:flex;flex-direction:column}
 .thanks-h{font-size:52px;font-weight:700;letter-spacing:-1.5px}
 .thanks-sub{font-size:18px;font-weight:300;color:rgba(255,255,255,.7)}
 .thanks-db{font-size:13px;color:rgba(255,255,255,.4);margin-top:8px;letter-spacing:.5px}
-
-/* ── Diagnostic dropdown ───────────────────────────────── */
-.diag-wrap{position:relative;margin-left:auto}
-.diag-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:500;cursor:pointer;transition:background .15s}
-.diag-btn:hover{background:rgba(255,255,255,.25)}
-.diag-btn .material-symbols-rounded{font-size:18px}
-.diag-menu{position:absolute;top:100%;right:0;margin-top:6px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);min-width:200px;z-index:500;display:none;overflow:hidden}
-.diag-menu.show{display:block}
-.diag-item{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#1A1C1E;cursor:pointer;transition:background .1s}
-.diag-item:hover{background:#F0F4FF}
-.diag-item .material-symbols-rounded{font-size:18px;color:#1565C0}
-.diag-sep{height:1px;background:#E0E4F0;margin:4px 0}
-.diag-head{padding:10px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;background:#FAFBFF}
 </style>
 </head>
 <body>
 <div id="bar">
   <div class="logo"><span class="material-symbols-rounded">analytics</span>Fleet Insights Tool <span style="color:rgba(255,255,255,.55);">| __DB_DISPLAY__</span></div>
-  <div class="diag-wrap">
-    <button class="diag-btn" id="diag-btn" onclick="toggleDiagMenu(event)" title="Download diagnostic CSV for data verification">
-      <span class="material-symbols-rounded">bug_report</span>Diagnostic CSV
-      <span class="material-symbols-rounded" style="font-size:16px">expand_more</span>
-    </button>
-    <div class="diag-menu" id="diag-menu">
-      <div class="diag-head">Per-Vehicle Summary</div>
-      <div class="diag-item" onclick="downloadDiagCsv('vehicles')"><span class="material-symbols-rounded">directions_car</span>Vehicle Summary</div>
-      <div class="diag-sep"></div>
-      <div class="diag-head">Raw Event Data</div>
-      <div class="diag-item" onclick="downloadDiagCsv('safety_events')"><span class="material-symbols-rounded">health_and_safety</span>Safety Events</div>
-      <div class="diag-item" onclick="downloadDiagCsv('battery_faults')"><span class="material-symbols-rounded">battery_error</span>Battery Faults</div>
-      <div class="diag-item" onclick="downloadDiagCsv('engine_faults')"><span class="material-symbols-rounded">car_gear</span>Engine Faults</div>
-      <div class="diag-sep"></div>
-      <div class="diag-item" onclick="downloadDiagCsv('all')"><span class="material-symbols-rounded">download</span>Download All</div>
-    </div>
-  </div>
   <div class="ctr" id="top-ctr"></div>
 </div>
 <div id="prog"><div id="prog-f" style="width:0"></div></div>
@@ -231,84 +199,9 @@ body{display:flex;flex-direction:column}
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 const SLIDES=__SLIDES_JSON__;
-const DIAG=__DIAG_DATA__;
 const CURRENCY='__CURRENCY__';
 const DB_NAME='__DB_DISPLAY__';
 
-// ── Diagnostic CSV functions ────────────────────────────────────────────────
-function toggleDiagMenu(e){
-  e.stopPropagation();
-  document.getElementById('diag-menu').classList.toggle('show');
-}
-document.addEventListener('click',()=>document.getElementById('diag-menu').classList.remove('show'));
-
-// RFC 4180 CSV field quoting: wrap in double quotes and double any embedded
-// quotes only when the value contains a comma, quote, or newline; else pass through.
-function csvEscape(v){
-  if(v==null)return '';
-  const s=String(v);
-  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
-}
-
-function downloadBlob(content,filename){
-  const blob=new Blob([content],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download=filename;
-  document.body.appendChild(a);a.click();
-  document.body.removeChild(a);URL.revokeObjectURL(url);
-}
-
-function downloadDiagCsv(type){
-  document.getElementById('diag-menu').classList.remove('show');
-  const period=SLIDES[0]?.period?.replace(/\s*→\s*/g,'_to_')||'period';
-  const prefix='diag_'+DB_NAME+'_'+period.replace(/[^a-zA-Z0-9_-]/g,'');
-
-  if(type==='all'){
-    // Stagger the four downloads (100/200/300ms) instead of firing them at once:
-    // browsers throttle / block rapid multi-file downloads triggered synchronously.
-    downloadDiagCsv('vehicles');
-    setTimeout(()=>downloadDiagCsv('safety_events'),100);
-    setTimeout(()=>downloadDiagCsv('battery_faults'),200);
-    setTimeout(()=>downloadDiagCsv('engine_faults'),300);
-    return;
-  }
-
-  let rows,headers,filename;
-
-  if(type==='vehicles'){
-    headers=['Device ID','Device Name','Group','Trip Count','Active Days','Distance (km)','Drive Hours','Idle Hours','Idle Cost','Safety Score','Safety Events','Battery Faults'];
-    rows=(DIAG.vehicles||[]).map(v=>[
-      v.device_id,v.device_name,v.group,v.trip_count,v.active_days,
-      v.distance_km,v.drive_hours,v.idle_hours,v.idle_cost,
-      v.safety_score,v.safety_events,v.battery_faults
-    ]);
-    filename=prefix+'_vehicles.csv';
-  }else if(type==='safety_events'){
-    headers=['Device ID','Device Name','Rule ID','Rule Name','Date Time','Duration'];
-    rows=(DIAG.safety_events||[]).map(e=>[
-      e.device_id,e.device_name,e.rule_id,e.rule_name,e.date_time,e.duration
-    ]);
-    filename=prefix+'_safety_events.csv';
-  }else if(type==='battery_faults'){
-    headers=['Device ID','Device Name','Diagnostic ID','Diagnostic Name','Code','Date Time'];
-    rows=(DIAG.battery_faults||[]).map(e=>[
-      e.device_id,e.device_name,e.diagnostic_id,e.diagnostic_name,e.code,e.date_time
-    ]);
-    filename=prefix+'_battery_faults.csv';
-  }else if(type==='engine_faults'){
-    headers=['Device ID','Device Name','Diagnostic ID','Diagnostic Name','Code','Controller ID','Date Time'];
-    rows=(DIAG.engine_faults||[]).map(e=>[
-      e.device_id,e.device_name,e.diagnostic_id,e.diagnostic_name,e.code,e.controller_id,e.date_time
-    ]);
-    filename=prefix+'_engine_faults.csv';
-  }else{
-    return;
-  }
-
-  const csv=[headers.map(csvEscape).join(','),...rows.map(r=>r.map(csvEscape).join(','))].join('\r\n');
-  downloadBlob(csv,filename);
-}
 let cur=0, _mapInst=null;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

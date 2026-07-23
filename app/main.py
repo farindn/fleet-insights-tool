@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.jobs.store import cleanup_old_jobs
-from app.routers import auth, download, fleet, generate, progress
+from app.routers import auth, download, export, fleet, generate, progress
 
 logging.basicConfig(level=logging.INFO)
 
@@ -52,6 +52,7 @@ app.include_router(fleet.router)
 app.include_router(generate.router)
 app.include_router(progress.router)
 app.include_router(download.router)
+app.include_router(export.router)
 
 # Serve SPA from static/
 # ``import os`` is kept local to this block since it is only needed for the

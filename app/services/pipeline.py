@@ -249,8 +249,11 @@ async def run_generation_pipeline(job: JobState) -> None:
             engine_fault_data=engine_fault_data,
             diagnostic_map=diagnostic_map,
         )
-        html = build_html_report(slide_list, db_display, currency, diagnostic_data)
+        html = build_html_report(slide_list, db_display, currency)
         job.result_html = html
+        # Retain the diagnostic rows server-side (not embedded in the report) so
+        # the ZIP endpoint can render the diagnostic CSVs while the job lives.
+        job.diagnostic_data = diagnostic_data
         job.status = "done"
         emit(job, "render", "Report ready.", done=True)
         job.pending_events.append(_done_event())
