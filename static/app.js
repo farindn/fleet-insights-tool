@@ -1013,7 +1013,7 @@ async function fetchReport(jobId, req) {
     state.reportBlob = blob;
     state.reportFilename = filename;
     // Diagnostic CSVs are fetched on demand (not embedded in the report); stash
-    // the matching ZIP name for the "Download All (ZIP)" button on the Done screen.
+    // the matching ZIP name for the "Download Raw Data" button on the Done screen.
     state.diagZipFilename = 'Fleet Insights_' + dbName + '_' + periodCode + '_diagnostics.zip';
 
     // Update done screen
